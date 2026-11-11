@@ -8,6 +8,8 @@ versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A launch still going at the voice's deadline says to ask what the MiSTer
+  is playing, never to ask again, so a slow start is not sent twice.
 - The MiSTer is found by its name first, then by spare `addresses` from the
   settings, in order, within six seconds. Status says which address
   answered. When none does, the voice names each one tried, in Norwegian, in

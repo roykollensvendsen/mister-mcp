@@ -146,3 +146,9 @@ name = "addresses are tried in the order the settings give"
 file = "src/mister_mcp/zaparoo.py"
 find = 'order = list\(self\._addresses\)'
 replace = 'order = list(reversed(self._addresses))'
+
+[[rule]]
+name = "a slow launch is never asked for again"
+file = "src/mister_mcp/server.py"
+find = 'working=LAUNCH_WORKING,'
+replace = 'working=WORKING,'

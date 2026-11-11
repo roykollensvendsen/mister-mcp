@@ -89,6 +89,19 @@ def test_a_tool_still_working_at_the_deadline_says_it_carries_on(monkeypatch):
     assert "carries on" in answer["say"]
 
 
+def test_a_slow_launch_is_never_asked_for_again(monkeypatch):
+    class Slow:
+        async def send(self, request, *, wait):
+            await asyncio.sleep(1)
+            return {"id": request["id"], "result": None}
+
+    monkeypatch.setattr("mister_mcp.server.ANSWER_WITHIN", 0.01)
+    answer = _call(build_server(MisterService(Slow())), "mister_launch", {"game": "Micro Mages"})
+    assert answer["outcome"] == "working"
+    assert "Ask what it is playing in a moment." in answer["say"]
+    assert "again" not in answer["say"]
+
+
 def test_a_tools_longest_wait_fits_in_the_voices_time():
     voice_limit, margin = 15.0, 2.0
     assert ANSWER_WITHIN + margin <= voice_limit

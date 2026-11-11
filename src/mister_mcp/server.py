@@ -31,6 +31,8 @@ SIMULATED = "A SIMULATED MiSTer, not a real one: say so. "
 ANSWER_WITHIN = 12.0
 #: What the voice hears when a tool is still working by then; the work carries on.
 WORKING = "That is taking a while, and it carries on. Ask again in a moment to hear how it went."
+#: What the voice hears when a start is still going by then. Asking again would start it twice.
+LAUNCH_WORKING = "The start is taking a while, and it carries on. Ask what it is playing in a moment."
 #: What the voice hears when mister-mcp itself fails, so it never hears only that the tool failed.
 BROKE = (
     "That went wrong inside mister-mcp. Try again. "
@@ -49,7 +51,13 @@ class _Guarded:
         #: Work still running after its answer was given, kept until it ends.
         self.running: set[asyncio.Future[Any]] = set()
 
-    def tool(self, **options: Any) -> Callable[[Callable[..., Awaitable[Any]]], Any]:  # noqa: ANN401
+    def tool(
+        self,
+        *,
+        working: str = WORKING,
+        **options: Any,  # noqa: ANN401
+    ) -> Callable[[Callable[..., Awaitable[Any]]], Any]:
+        """Register a tool; `working` is what the voice hears if it is still going at the deadline."""
         register = self._server.tool(**options)
 
         def guard(tool: Callable[..., Awaitable[dict[str, Any]]]) -> Any:  # noqa: ANN401
@@ -63,7 +71,7 @@ class _Guarded:
                     self.running.add(work)
                     work.add_done_callback(_ended)
                     work.add_done_callback(self.running.discard)
-                    answer = {"success": False, "outcome": "working", "say": WORKING}
+                    answer = {"success": False, "outcome": "working", "say": working}
                 except Exception:  # noqa: BLE001 - whatever broke, the voice gets a sentence
                     # RULE: every tool answers with a sentence, even when it fails
                     answer = {"success": False, "outcome": "refused", "say": BROKE}
@@ -106,7 +114,9 @@ def build_server(service: MisterService, *, simulated: bool = False) -> MCPServe
     async def mister_search(name: str) -> dict[str, Any]:
         return await service.search(name)
 
+    # RULE: a slow launch is never asked for again
     @guarded.tool(
+        working=LAUNCH_WORKING,
         annotations=CHANGES,
         description=(
             "Start a game or a core.\nGame: words of its title. System: its name, alone to start its core"
