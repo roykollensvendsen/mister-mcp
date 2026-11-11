@@ -10,7 +10,7 @@ import pytest
 
 from mister_mcp.cli import tv_from
 from mister_mcp.settings import SettingsError
-from mister_mcp.tv import TvPlugin, show_mister
+from mister_mcp.tv import CLOSE_WITHIN, TvPlugin, show_mister
 
 FAKE = pathlib.Path(__file__).with_name("fake_tv_mcp.py")
 
@@ -54,3 +54,21 @@ def test_the_tv_table_needs_a_command_and_a_name():
         tv_from({"name": "the den"})
     plugin = tv_from({"command": ["tv-mcp", "serve"], "name": "the den"})
     assert plugin.device == "MiSTer"
+
+
+def test_the_tv_plugin_is_closed_after_every_use_even_a_slow_one(tmp_path, monkeypatch):
+    monkeypatch.setattr("mister_mcp.tv.TV_WITHIN", 0.05)
+    log = tmp_path / "calls.log"
+    log.touch()
+    plugin = TvPlugin(command=[sys.executable, str(FAKE), "on", str(log)], tv="the den", device="Game box")
+
+    async def timed():
+        loop = asyncio.get_running_loop()
+        began = loop.time()
+        answer = await show_mister(plugin)
+        return answer, loop.time() - began
+
+    answer, took = asyncio.run(timed())
+    assert answer["outcome"] == "working"
+    assert not plugin.is_open
+    assert took <= 0.05 + CLOSE_WITHIN + 0.5
