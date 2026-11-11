@@ -16,9 +16,12 @@ import pathlib
 import stat
 import tomllib
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from mister_mcp.zaparoo import PORT
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 #: The folder the owner's settings and keys live in.
 FOLDER = pathlib.Path("~/.config/mister-mcp")
@@ -59,6 +62,25 @@ def _key(path: pathlib.Path) -> str | None:
     return path.read_text().strip() or None
 
 
+def _keys(table: dict[str, Any]) -> Iterator[str]:
+    """Every key in `table`, at any depth."""
+    for key, value in table.items():
+        yield key
+        if isinstance(value, dict):
+            yield from _keys(value)
+
+
+def _no_password(table: dict[str, Any], path: pathlib.Path) -> None:
+    """Refuse a settings file that holds a password anywhere: the MiSTer is reached by key only."""
+    held = next((key for key in _keys(table) if "password" in key.casefold()), None)
+    if held:
+        msg = (
+            f"{path} holds a password ({held}); the MiSTer is reached by key only. "
+            "Remove that line, and run ssh-copy-id root@<the MiSTer> in a terminal instead."
+        )
+        raise SettingsError(msg)
+
+
 def load_settings(path: pathlib.Path) -> Settings:
     """The settings in `path`; an absent file means nothing is set."""
     try:
@@ -67,6 +89,7 @@ def load_settings(path: pathlib.Path) -> Settings:
         msg = f"{path} is not valid TOML ({error}); fix that line, or use --simulate meanwhile."
         raise SettingsError(msg) from error
     mister = table.get("mister", {})
+    _no_password(table, path)
     return Settings(
         address=mister.get("address"),
         addresses=tuple(str(a) for a in mister.get("addresses", [])),

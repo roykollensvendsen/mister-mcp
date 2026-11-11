@@ -12,8 +12,12 @@ from __future__ import annotations
 
 import pathlib
 
-#: What the voice hears when the MiSTer no longer has the key, in the owner's words.
-KEY_MISSING = "SSH-nøkkelen mangler på MiSTer-en, kjør ssh-copy-id root@{address} på nytt."
+#: What the voice hears when the MiSTer refuses this computer's key, in the owner's words. No password
+#: is ever tried instead, not even the MiSTer's factory default: none is written anywhere.
+KEY_MISSING = (
+    "The MiSTer does not accept this computer's key. "
+    "Run ssh-copy-id root@{address} in a terminal, then change the MiSTer's password from the default."
+)
 #: Seconds to open the SSH connection.
 CONNECT_WAIT = 5
 
@@ -23,11 +27,21 @@ _ASKS_FOR_A_PASSWORD = ("permission denied", "password:")
 def ssh_options(key_file: str) -> list[str]:
     """The options every SSH call to the MiSTer runs with: the key in `key_file`, never a password."""
     # RULE: every ssh call runs in batch mode
-    return [
-        "-o",
-        "BatchMode=yes",
+    batch = ["-o", "BatchMode=yes"]
+    # RULE: never a password login
+    key_only = [
         "-o",
         "PasswordAuthentication=no",
+        "-o",
+        "KbdInteractiveAuthentication=no",
+        "-o",
+        "PreferredAuthentications=publickey",
+        "-o",
+        "NumberOfPasswordPrompts=0",
+    ]
+    return [
+        *batch,
+        *key_only,
         "-o",
         "IdentitiesOnly=yes",
         "-o",
