@@ -164,3 +164,9 @@ name = "a token works once and only while fresh"
 file = "src/mister_mcp/service.py"
 find = 'if asked is None or self\._clock\(\) > asked\[1\]:'
 replace = 'if asked is None:'
+
+[[rule]]
+name = "zaparoos own words are never read aloud"
+file = "src/mister_mcp/service.py"
+find = 'say = REFUSALS\.get\(error\.category or "", REFUSED\)'
+replace = 'say = f"{error}. " + REFUSALS.get(error.category or "", REFUSED)'
