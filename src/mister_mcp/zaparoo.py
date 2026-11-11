@@ -51,6 +51,49 @@ class UnreachableError(OSError):
         self.tried = tuple(tried)
 
 
+class ZaparooNeedsPairingError(UnreachableError):
+    """Zaparoo answered, but it serves only paired clients, and this computer is not one."""
+
+
+class Session(Protocol):
+    """How one connection's frames are written and read, when Zaparoo encrypts them."""
+
+    def first(self, text: str) -> str:
+        """The first frame, carrying the request `text`."""
+        ...
+
+    def read(self, raw: str) -> str:
+        """The JSON text inside a frame from Zaparoo; raises when it cannot be opened."""
+        ...
+
+
+#: Zaparoo's plaintext refusals of a client that must be paired: an encryption version
+#: it does not support, and encryption required.
+NEEDS_PAIRING_CODES = (-32001, -32002)
+
+
+def _refusal(raw: str | bytes) -> bool:
+    """Whether `raw` is Zaparoo's plaintext refusal of an unpaired client."""
+    try:
+        answer = json.loads(raw)
+    except ValueError:
+        return False
+    error = answer.get("error") if isinstance(answer, dict) else None
+    return isinstance(error, dict) and error.get("code") in NEEDS_PAIRING_CODES
+
+
+class _Plain:
+    """The frames of an unsecured Zaparoo: the JSON text as it is, both ways."""
+
+    def first(self, text: str) -> str:
+        """The request, as it is."""
+        return text
+
+    def read(self, raw: str) -> str:
+        """The frame, as it is."""
+        return raw
+
+
 class ZaparooNotRunningError(UnreachableError):
     """The MiSTer refused the connection: it is on, but Zaparoo is not running on it."""
 
@@ -156,9 +199,11 @@ class WebSocketTransport:
         port: int = PORT,
         api_key: str | None = None,
         connect_wait: float = CONNECT_WAIT,
+        framing: Callable[[], Session] | None = None,
     ) -> None:
-        """Reach Zaparoo at `address`; `api_key`, when given, is sent as a bearer token."""
+        """Reach Zaparoo at `address`; `api_key` is sent as a bearer token; `framing` encrypts."""
         self.address, self._connect_wait = address, connect_wait
+        self._framing: Callable[[], Session] = framing or _Plain
         self._url = f"ws://{address}:{port}{PATH}"
         self._headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
 
@@ -169,13 +214,31 @@ class WebSocketTransport:
                 async with websockets.connect(
                     self._url, open_timeout=self._connect_wait, additional_headers=self._headers
                 ) as socket:
-                    await socket.send(json.dumps(request))
-                    while True:
-                        answer = json.loads(await socket.recv())
-                        if isinstance(answer, dict) and answer.get("id") == request["id"]:
-                            return answer
+                    return await self._exchange(socket, request)
+        except UnreachableError:
+            raise
         except (TimeoutError, OSError, websockets.WebSocketException) as error:
             raise _unanswered(error, self.address) from error
+
+    async def _exchange(self, socket: Any, request: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN401
+        """Send `request` in this connection's framing and read until its own answer."""
+        session = self._framing()
+        await socket.send(session.first(json.dumps(request)))
+        while True:
+            answer = json.loads(self._open(session, await socket.recv()))
+            if isinstance(answer, dict) and answer.get("id") == request["id"]:
+                return answer
+
+    def _open(self, session: Session, raw: str | bytes) -> str:
+        """The JSON inside one frame; ZaparooNeedsPairingError when Zaparoo wants pairing."""
+        # RULE: a refused login is said as needing pairing
+        if _refusal(raw):
+            msg = "Zaparoo wants this computer paired"
+            raise ZaparooNeedsPairingError(msg, tried=[self.address])
+        try:
+            return session.read(raw if isinstance(raw, str) else raw.decode())
+        except ValueError as error:
+            raise ZaparooNeedsPairingError(str(error), tried=[self.address]) from error
 
 
 def _unanswered(error: Exception, address: str) -> UnreachableError:
@@ -213,7 +276,7 @@ class FallbackTransport:
         for address in self._order():
             try:
                 answer = await self._at[address].send(request, wait=wait)
-            except ZaparooNotRunningError:
+            except (ZaparooNotRunningError, ZaparooNeedsPairingError):
                 self.used = address
                 raise
             except UnreachableError:

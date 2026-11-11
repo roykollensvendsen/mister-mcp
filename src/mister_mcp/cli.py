@@ -9,7 +9,15 @@ import pathlib
 import sys
 from typing import TYPE_CHECKING
 
-from mister_mcp.pairing import PAIRING_FILE, PairingError, http_post, pair, save_pairing
+from mister_mcp.pairing import (
+    PAIRING_FILE,
+    EncryptedSession,
+    PairingError,
+    http_post,
+    load_pairing,
+    pair,
+    save_pairing,
+)
 from mister_mcp.server import build_server
 from mister_mcp.service import MisterService
 from mister_mcp.settings import FOLDER, SettingsError, load_settings, settings_path
@@ -20,6 +28,8 @@ from mister_mcp.updater import UpdateService
 from mister_mcp.zaparoo import FallbackTransport, WebSocketTransport, connect_wait_for
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from mister_mcp.zaparoo import Transport
 
 #: Every verb this command has. The documentation test requires each one to
@@ -49,14 +59,28 @@ def _service(*, simulate: bool, settings_file: str | None) -> tuple[MisterServic
         msg = f"No MiSTer address in {path}; set [mister] address there, or use --simulate."
         raise SettingsError(msg)
     wait = connect_wait_for(len(where))
+    framing = framing_from_pairing()
 
     def reach(address: str) -> Transport:
-        return WebSocketTransport(address, port=settings.port, api_key=settings.api_key, connect_wait=wait)
+        return WebSocketTransport(
+            address, port=settings.port, api_key=settings.api_key, connect_wait=wait, framing=framing
+        )
 
     transport: Transport = FallbackTransport(where, reach=reach)
     shell = SshShell(where, key_file=str(SSH_KEY))
     updater = UpdateService(shell, transport, history=UPDATE_RUNS.expanduser())
     return MisterService(transport, tv=tv_from(settings.tv)), updater
+
+
+def framing_from_pairing() -> Callable[[], EncryptedSession] | None:
+    """Encrypted sessions with the kept pairing; None when this computer is not paired."""
+    try:
+        paired = load_pairing((FOLDER / PAIRING_FILE).expanduser())
+    except PairingError as error:
+        raise SettingsError(str(error)) from error
+    if paired is None:
+        return None
+    return lambda: EncryptedSession(paired)
 
 
 def tv_from(table: dict[str, object]) -> TvSwitch | None:

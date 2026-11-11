@@ -22,6 +22,7 @@ from mister_mcp.zaparoo import (
     UnreachableError,
     Zaparoo,
     ZaparooError,
+    ZaparooNeedsPairingError,
     ZaparooNotRunningError,
     game_text,
     system_text,
@@ -86,6 +87,12 @@ NOT_RUNNING = (
     "The MiSTer is on, but Zaparoo isn't running on it. "
     "Start Zaparoo from the MiSTer's Scripts menu, and ask again."
 )
+#: The command that pairs this computer with a secured Zaparoo, as typed.
+PAIR_COMMAND = "uv run --directory ~/mister-mcp mister-mcp pair"
+PAIR_NEEDED = (
+    "The MiSTer is on, but Zaparoo wants this computer paired first. "
+    f"Start a pairing on the MiSTer, then run {PAIR_COMMAND} in a terminal and type the PIN it shows."
+)
 #: The most games one answer reads out; the voice cannot list a hundred.
 MAX_RESULTS = 5
 
@@ -102,6 +109,8 @@ def not_found(tried: tuple[str, ...]) -> str:
 def _unreachable(error: UnreachableError, **fields: Any) -> dict[str, Any]:  # noqa: ANN401
     if isinstance(error, ZaparooNotRunningError):
         say = NOT_RUNNING
+    elif isinstance(error, ZaparooNeedsPairingError):
+        say = PAIR_NEEDED
     else:
         say = not_found(error.tried) if error.tried else UNREACHABLE
     return {"success": False, "outcome": "unreachable", "say": say, **fields}
