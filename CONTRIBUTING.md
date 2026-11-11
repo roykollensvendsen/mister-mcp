@@ -26,8 +26,15 @@ because they are the same lines:
 uv run ruff check . && uv run ruff format --check .
 uv run mypy src
 uv run pytest -q --cov
+uv run python scripts/mutate.py
 committed --no-merge-commit origin/main..HEAD
+python scripts/no_session_links.py origin/main..HEAD
 ```
+
+The suite also scans every tracked file for a home address, and CI scans the
+whole history for keys with gitleaks. The pre-commit hook runs the same
+private-data scan over what is staged, so a home address is refused before it
+is a commit.
 
 Run them after the last edit, not before it. A file edited after the format
 gate ran will fail in continuous integration, which is the cheapest possible
