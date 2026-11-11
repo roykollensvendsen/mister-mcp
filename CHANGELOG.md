@@ -8,6 +8,8 @@ versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A start is read back up to three times, a second apart, so a game a real
+  MiSTer is still loading is not said to have failed.
 - The commands the voice suggests run as typed: `uv run --directory
   ~/mister-mcp mister-mcp status`, and the TV plugin's own command from the
   settings with `status` in place of `serve`.

@@ -108,8 +108,8 @@ replace = 'if self.tv is None:'
 [[rule]]
 name = "a start is said as done only once the mister shows it"
 file = "src/mister_mcp/service.py"
-find = 'if active and shows == game and \(game or active\.get\("systemName"\) == system\):'
-replace = 'if True:'
+find = '^        if _shows\(active, start\):$'
+replace = '        if True:'
 
 [[rule]]
 name = "a measure that gets worse fails the check"
