@@ -54,7 +54,18 @@ itself: `**launch.system:<id>`, where the id is one Zaparoo listed in
 `systems`, or the exact `zapScript` of a search result, which must start with
 `@` and contain neither `**` nor `||`. Every `run` is sent with
 `unsafe: true`, which makes Core treat it as remote and refuse `**execute`
-and `**input` even if a text slipped through. When Core cannot be reached, the
+and `**input` even if a text slipped through.
+
+`unsafe: true` unlocks nothing. Despite its name in Zaparoo's documentation
+("allow unsafe operations"), in Core's code it marks the request as coming
+from a remote source, and `**execute` and `**input.*` then refuse it
+(`pkg/zapscript/utils.go`, `pkg/zapscript/input.go`, read 2026-11-11). It does
+not stop `**mister.script` or `**mister.ini`; only the text check above does.
+The words the owner says never reach `run`: a game's name goes to
+`media.search`, and only the `zapScript` of the one result picked is sent; a
+system's name is matched against `systems`, and only the listed id is sent.
+`tests/test_launch.py::test_the_voices_own_words_never_reach_a_start` and
+`test_a_bad_launch_text_from_zaparoo_itself_is_never_sent` show both. When Core cannot be reached, the
 plugin says the MiSTer is off or not on the network; it never guesses which.
 
 ## Consequences

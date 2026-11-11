@@ -41,9 +41,21 @@ calls `tv_status` for that TV, and only when it reports the screen on
 never calls any other TV tool. When `tv_input` is not offered (its feature is
 off in tv-mcp's settings), the TV is left alone and the answer says so; this
 plugin never switches that feature on. mister-mcp never reads tv-mcp's
-settings.
+settings. The child is closed after each launch, and is started only after
+the MiSTer showed the game had started.
+
+The rest of the plugin sees only a small interface, `TvSwitch.show_mister()`.
+When plugins can ask the bridge to call another plugin's tool, a `TvSwitch`
+that asks the bridge for `tv_input` replaces the stdio child, and nothing
+else changes.
 
 ## Consequences
+
+- The owner's working rule that nothing switches a TV on at night holds here
+  at every hour, because no power tool is ever called and `tv_input` refuses a
+  TV whose screen is not on. A start at night can still change what an
+  already-on screen shows, because the owner asked for the game. A time window
+  of its own would be a new decision.
 
 - A second tv-mcp process talks to the TV for a moment, beside the bridge's.
 - Starting it adds a few seconds to a launch, so the TV step has its own

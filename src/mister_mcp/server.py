@@ -23,7 +23,8 @@ if TYPE_CHECKING:
 INSTRUCTIONS = (
     "Says what the owner's MiSTer FPGA is playing and finds its games by name. "
     "Read each 'say' aloud as it is. "
-    "No tool writes, deletes or changes anything on the MiSTer."
+    "Start a game only when the owner asks for it now. No tool writes, deletes or changes a setting "
+    "on the MiSTer, and none switches a TV on."
 )
 SIMULATED = "A SIMULATED MiSTer, not a real one: say so. "
 #: The Claude app gives up on a call after about 15 seconds; every tool answers before then.
@@ -101,5 +102,15 @@ def build_server(service: MisterService, *, simulated: bool = False) -> MCPServe
     )
     async def mister_search(name: str) -> dict[str, Any]:
         return await service.search(name)
+
+    @guarded.tool(
+        annotations=CHANGES,
+        description=(
+            "Start a game or a core.\nGame: words of its title. System: its name, alone to start its core"
+            " with no game. Then the TV it is plugged into shows it, only if that TV is already on."
+        ),
+    )
+    async def mister_launch(game: str | None = None, system: str | None = None) -> dict[str, Any]:
+        return await service.launch(game=game, system=system)
 
     return server

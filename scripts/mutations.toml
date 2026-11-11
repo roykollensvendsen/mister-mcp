@@ -86,3 +86,27 @@ name = "every simulated answer says simulated first"
 file = "src/mister_mcp/server.py"
 find = 'if self\._simulated:'
 replace = 'if False:'
+
+[[rule]]
+name = "only the tv status and input tools are ever called"
+file = "src/mister_mcp/tv.py"
+find = 'if tool not in self\.TOOLS:'
+replace = 'if False:'
+
+[[rule]]
+name = "a tv that is not on is never sent an input"
+file = "src/mister_mcp/tv.py"
+find = 'if _screen\(report\) != "on":'
+replace = 'if False:'
+
+[[rule]]
+name = "the tv is touched only once the game started"
+file = "src/mister_mcp/service.py"
+find = 'if not started\["success"\] or self\.tv is None:'
+replace = 'if self.tv is None:'
+
+[[rule]]
+name = "a start is said as done only once the mister shows it"
+file = "src/mister_mcp/service.py"
+find = 'if active and shows == game and \(game or active\.get\("systemName"\) == system\):'
+replace = 'if True:'

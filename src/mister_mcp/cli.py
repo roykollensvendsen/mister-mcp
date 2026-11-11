@@ -12,6 +12,7 @@ from mister_mcp.server import build_server
 from mister_mcp.service import MisterService
 from mister_mcp.settings import SettingsError, load_settings, settings_path
 from mister_mcp.simulator import SimulatedMister
+from mister_mcp.tv import SimulatedTvPlugin, TvPlugin, TvSwitch
 from mister_mcp.zaparoo import WebSocketTransport
 
 if TYPE_CHECKING:
@@ -22,15 +23,27 @@ if TYPE_CHECKING:
 COMMANDS: tuple[str, ...] = ("serve", "status")
 
 
-def _transport(*, simulate: bool, settings_file: str | None) -> Transport:
+def _service(*, simulate: bool, settings_file: str | None) -> MisterService:
     if simulate:
-        return SimulatedMister()
+        return MisterService(SimulatedMister(), tv=SimulatedTvPlugin())
     path = pathlib.Path(settings_file).expanduser() if settings_file else settings_path()
     settings = load_settings(path)
     if not settings.address:
         msg = f"No MiSTer address in {path}; set [mister] address, or use --simulate."
         raise SettingsError(msg)
-    return WebSocketTransport(settings.address, port=settings.port, api_key=settings.api_key)
+    transport: Transport = WebSocketTransport(settings.address, port=settings.port, api_key=settings.api_key)
+    return MisterService(transport, tv=tv_from(settings.tv))
+
+
+def tv_from(table: dict[str, object]) -> TvSwitch | None:
+    """The TV step from the settings' [tv] table; None when there is none."""
+    if not table:
+        return None
+    command, tv = table.get("command"), table.get("name")
+    if not (isinstance(command, list) and command and isinstance(tv, str)):
+        msg = "[tv] needs command = [...] and name = the TV as the TV plugin knows it."
+        raise SettingsError(msg)
+    return TvPlugin(command=[str(c) for c in command], tv=tv, device=str(table.get("device", "MiSTer")))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -41,11 +54,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--settings-file", help="instead of ~/.config/mister-mcp/config.toml")
     args = parser.parse_args(argv)
     try:
-        transport = _transport(simulate=args.simulate, settings_file=args.settings_file)
+        service = _service(simulate=args.simulate, settings_file=args.settings_file)
     except SettingsError as error:
         sys.stderr.write(f"mister-mcp: {error}\n")
         return 2
-    service = MisterService(transport)
     if args.command == "serve":  # pragma: no cover - runs until stdin closes
         asyncio.run(build_server(service, simulated=args.simulate).run_stdio_async())
         return 0

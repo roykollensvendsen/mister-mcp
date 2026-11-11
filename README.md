@@ -29,6 +29,7 @@ $ uv run mister-mcp serve --simulate < /dev/null
 |---|---|---|
 | `mister_status` | Whether the MiSTer is on, and the system and game it runs | No |
 | `mister_search` | Up to five games whose names hold every word said, with their systems | No |
+| `mister_launch` | Starts a game by name, or a system's core alone, reads back what runs, then shows it on the TV if that TV is already on | Starts a game |
 
 Every answer has `say`, read aloud as it is, and `success` with `outcome`
 for a program: `done`, `unreachable` (the MiSTer did not answer: off, or not
@@ -44,6 +45,23 @@ In `~/.config/mister-mcp/config.toml`, never in this repository:
 [mister]
 address = "192.0.2.10"   # the MiSTer on the home network
 ```
+
+To have the TV the MiSTer is plugged into show it after a start, add the
+TV plugin ([tv-mcp](https://github.com/roykollensvendsen/tv-mcp)) and the
+names it knows:
+
+<!-- not run: a settings file, not a command -->
+```toml
+[tv]
+command = ["uv", "run", "--directory", "~/tv-mcp", "tv-mcp", "serve"]
+name = "the den"      # the TV, as tv-mcp knows it
+device = "MiSTer"     # the device on its input, as tv-mcp's settings name it
+```
+
+The plugin starts that server for a moment, asks `tv_status` whether the
+screen is on, and only then asks `tv_input` to show the device. It calls no
+other TV tool, and closes the TV plugin again after each start
+([ADR-MM-002](decisions/ADR-MM-002-switch-the-tv-through-tv-mcps-own-tools.md)).
 
 A Zaparoo API key, if Zaparoo is set to ask for one, goes alone in
 `~/.config/mister-mcp/zaparoo-key`, readable by the owner only
