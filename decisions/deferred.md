@@ -12,3 +12,7 @@ read whenever a decision record is written and when a phase ends.
 | A release workflow and publishing | The first release someone outside will install | A published name is claimed and a published version cannot be reused |
 | `CODEOWNERS` | A second person who reviews | It would name one person as the owner of everything |
 | `pre-commit` as a requirement rather than an option | A second contributor | The gates run in CI, and a hook one person installs is a hook one person maintains |
+| Switching the MiSTer on and off through a smart plug, after a clean shutdown over SSH | The owner names the plug and says yes to the request-and-confirm design | The owner chose to start with games; power is the one risky action and needs its own record |
+| Pairing with Zaparoo as a member client, or with an API key | The first use against the real MiSTer | It is a change on the MiSTer, the owner's to make; until then the plugin's own allow-list is the guard |
+| Blocking `execute`, `mister.script` and `mister.ini` in Zaparoo's `block_commands` on the MiSTer | The first use against the real MiSTer | A settings change on the MiSTer, the owner's to make; `unsafe: true` and the plugin's text check already refuse them |
+| The quality ratchet from tv-mcp (no level worse than main's) | The three tools are merged | Until there is code, there is no level to keep |
