@@ -39,3 +39,9 @@ def test_only_private_settings_count_not_the_friendly_names(tmp_path):
         '[tv]\nname = "the den"\ndevice = "Game box"\n'
     )
     assert private_data_scan.private_values(path) == {"abc123secret", "192.0.2.77"}
+
+
+def test_spare_addresses_in_the_settings_count_as_private(tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_text('[mister]\naddress = "mister.example"\naddresses = ["192.0.2.77", "192.0.2.78"]\n')
+    assert private_data_scan.private_values(path) == {"mister.example", "192.0.2.77", "192.0.2.78"}

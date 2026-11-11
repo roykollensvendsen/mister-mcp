@@ -8,6 +8,10 @@ versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The MiSTer is found by its name first, then by spare `addresses` from the
+  settings, in order, within six seconds. Status says which address
+  answered. When none does, the voice names each one tried, in Norwegian, in
+  the owner's words, with what to check.
 - `mister_status`: whether the MiSTer is on, and the system and game it runs,
   read from Zaparoo Core. A MiSTer that does not answer is said to be off or
   off the network, never one of the two.

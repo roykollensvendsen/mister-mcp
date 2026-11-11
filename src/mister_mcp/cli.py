@@ -13,7 +13,7 @@ from mister_mcp.service import MisterService
 from mister_mcp.settings import SettingsError, load_settings, settings_path
 from mister_mcp.simulator import SimulatedMister
 from mister_mcp.tv import SimulatedTvPlugin, TvPlugin, TvSwitch
-from mister_mcp.zaparoo import WebSocketTransport
+from mister_mcp.zaparoo import FallbackTransport, WebSocketTransport, connect_wait_for
 
 if TYPE_CHECKING:
     from mister_mcp.zaparoo import Transport
@@ -28,10 +28,16 @@ def _service(*, simulate: bool, settings_file: str | None) -> MisterService:
         return MisterService(SimulatedMister(), tv=SimulatedTvPlugin())
     path = pathlib.Path(settings_file).expanduser() if settings_file else settings_path()
     settings = load_settings(path)
-    if not settings.address:
+    where = settings.where()
+    if not where:
         msg = f"No MiSTer address in {path}; set [mister] address there, or use --simulate."
         raise SettingsError(msg)
-    transport: Transport = WebSocketTransport(settings.address, port=settings.port, api_key=settings.api_key)
+    wait = connect_wait_for(len(where))
+
+    def reach(address: str) -> Transport:
+        return WebSocketTransport(address, port=settings.port, api_key=settings.api_key, connect_wait=wait)
+
+    transport: Transport = FallbackTransport(where, reach=reach)
     return MisterService(transport, tv=tv_from(settings.tv))
 
 

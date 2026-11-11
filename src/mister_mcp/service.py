@@ -36,8 +36,20 @@ NOT_RUNNING = (
 MAX_RESULTS = 5
 
 
+def not_found(tried: tuple[str, ...]) -> str:
+    """What the voice hears when none of the addresses `tried` answered, in the owner's words."""
+    where = tried[0] if len(tried) == 1 else ", ".join(tried[:-1]) + " eller " + tried[-1]
+    return (
+        f"Fant ikke MiSTer-en på {where}. Sjekk at den er på og koblet til nettet. "
+        "Har den fått ny adresse, si den til meg."
+    )
+
+
 def _unreachable(error: UnreachableError, **fields: Any) -> dict[str, Any]:  # noqa: ANN401
-    say = NOT_RUNNING if isinstance(error, ZaparooNotRunningError) else UNREACHABLE
+    if isinstance(error, ZaparooNotRunningError):
+        say = NOT_RUNNING
+    else:
+        say = not_found(error.tried) if error.tried else UNREACHABLE
     return {"success": False, "outcome": "unreachable", "say": say, **fields}
 
 
@@ -95,6 +107,7 @@ class MisterService:
     def __init__(self, transport: Transport, *, tv: TvSwitch | None = None) -> None:
         """Reach the MiSTer through `transport`; show it on `tv` after a start, when one is set."""
         self.zaparoo = Zaparoo(transport)
+        self._transport = transport
         self.tv = tv
 
     async def status(self) -> dict[str, Any]:
@@ -107,11 +120,14 @@ class MisterService:
         except UnreachableError as error:
             # RULE: a mister that does not answer is not called on or off
             return _unreachable(error, on=None, system=None, game=None)
+        address = getattr(self._transport, "used", None)
+        at = f"at {address}, " if address else ""
         return {
             "success": True,
             "outcome": "done",
-            "say": f"The MiSTer is on, {describe(active)}.",
+            "say": f"The MiSTer is on, {at}{describe(active)}.",
             "on": True,
+            "address": address,
             "system": (active or {}).get("systemName") or None,
             "game": (active or {}).get("mediaName") or None,
         }

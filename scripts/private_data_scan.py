@@ -39,7 +39,7 @@ MIN_SECRET = 6  # shorter values ("true", a port) would match ordinary text
 
 #: The settings that say where the home is or unlock something. A name meant to be
 #: said aloud (the TV to switch, the device on its input) is not among them.
-PRIVATE_KEYS = {"address", "host", "mac", "url", "api_key", "token", "user"}
+PRIVATE_KEYS = {"address", "addresses", "host", "mac", "url", "api_key", "token", "user"}
 
 
 def private_values(settings: pathlib.Path) -> set[str]:
@@ -50,8 +50,9 @@ def private_values(settings: pathlib.Path) -> set[str]:
         for key, value in stack.pop().items():
             if isinstance(value, dict):
                 stack.append(value)
-            elif key in PRIVATE_KEYS and isinstance(value, str) and len(value) >= MIN_SECRET:
-                out.add(value)
+            elif key in PRIVATE_KEYS:
+                values = value if isinstance(value, list) else [value]
+                out |= {v for v in values if isinstance(v, str) and len(v) >= MIN_SECRET}
     return out
 
 

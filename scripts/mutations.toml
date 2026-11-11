@@ -140,3 +140,9 @@ name = "a missing key is said in the owners words"
 file = "src/mister_mcp/ssh.py"
 find = 'if any\(sign in said for sign in _ASKS_FOR_A_PASSWORD\):'
 replace = 'if False:'
+
+[[rule]]
+name = "addresses are tried in the order the settings give"
+file = "src/mister_mcp/zaparoo.py"
+find = 'order = list\(self\._addresses\)'
+replace = 'order = list(reversed(self._addresses))'
