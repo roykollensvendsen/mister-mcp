@@ -3,7 +3,7 @@
 
 import asyncio
 
-from mister_mcp.service import MisterService
+from mister_mcp.service import READ_BACK_GAP, READ_BACK_TRIES, MisterService
 from mister_mcp.simulator import SimulatedMister
 from mister_mcp.tv import SimulatedTvPlugin, TvSwitch
 
@@ -150,3 +150,45 @@ def test_a_hands_off_tv_is_never_sent_an_input():
     answer = _launch(tv=tv, game="micro mages")
     assert [name for name, _ in tv.calls] == ["tv_status"]
     assert answer["tv"]["outcome"] == "left_alone"
+
+
+class _Pauses:
+    """Stands in for asyncio.sleep, keeping each pause instead of waiting."""
+
+    def __init__(self):
+        self.taken = []
+
+    async def __call__(self, seconds):
+        self.taken.append(seconds)
+
+
+def _reads_after_the_start(mister):
+    methods = [r["method"] for r in mister.sent]
+    return methods[methods.index("run") + 1 :].count("media.active")
+
+
+def test_a_game_that_loads_slowly_is_still_said_as_started():
+    mister = SimulatedMister()
+    mister.loads_after = 2
+    pauses = _Pauses()
+    answer = asyncio.run(MisterService(mister, pause=pauses).launch(game="Micro Mages"))
+    assert answer["outcome"] == "done"
+    assert _reads_after_the_start(mister) == 3
+    assert pauses.taken == [READ_BACK_GAP, READ_BACK_GAP]
+
+
+def test_the_read_back_stops_after_its_tries():
+    mister = SimulatedMister()
+    mister.loads_after = 10
+    pauses = _Pauses()
+    answer = asyncio.run(MisterService(mister, pause=pauses).launch(game="Micro Mages"))
+    assert answer["outcome"] == "unverified"
+    assert _reads_after_the_start(mister) == READ_BACK_TRIES
+    assert len(pauses.taken) == READ_BACK_TRIES - 1
+
+
+def test_a_start_shown_at_once_is_not_waited_for():
+    mister = SimulatedMister()
+    pauses = _Pauses()
+    asyncio.run(MisterService(mister, pause=pauses).launch(game="Micro Mages"))
+    assert pauses.taken == []

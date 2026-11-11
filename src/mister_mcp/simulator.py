@@ -51,6 +51,10 @@ class SimulatedMister:
         self.extra_result: dict[str, Any] | None = None
         #: When set, a start is acknowledged but the MiSTer keeps showing what it showed.
         self.ignores_runs = False
+        #: How many reads after a start still show what ran before, as a real MiSTer loading a game.
+        self.loads_after = 0
+        self._loading = 0
+        self._before: dict[str, Any] | None = None
 
     def play(self, system: str, name: str | None) -> None:
         """Make the MiSTer run `name` on `system`'s core, or the core alone."""
@@ -70,7 +74,7 @@ class SimulatedMister:
         if method == "version":
             return answer | {"result": {"version": "2.22.1", "platform": "mister"}}
         if method == "media.active":
-            return answer | {"result": self.active}
+            return answer | {"result": self._shown()}
         if method == "systems":
             systems = [{"id": key, "name": name} for key, name in SYSTEMS.items()]
             return answer | {"result": {"systems": systems}}
@@ -85,6 +89,13 @@ class SimulatedMister:
         if method == "run":
             return answer | self._run(str(params.get("text", "")))
         return answer | {"error": {"code": -32601, "message": "method not found"}}
+
+    def _shown(self) -> dict[str, Any] | None:
+        """What media.active reports: what ran before a start, while the new game still loads."""
+        if self._loading:
+            self._loading -= 1
+            return self._before
+        return self.active
 
     def _answers(self) -> None:
         """Raise as the WebSocket would when this MiSTer is off, or on without Zaparoo."""
@@ -109,6 +120,7 @@ class SimulatedMister:
     def _run(self, text: str) -> dict[str, Any]:
         if self.ignores_runs:
             return {"result": None}
+        self._before, self._loading = self.active, self.loads_after
         if text.startswith("**launch.system:"):
             system = text.removeprefix("**launch.system:")
             if system in SYSTEMS:

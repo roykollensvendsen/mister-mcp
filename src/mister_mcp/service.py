@@ -9,6 +9,7 @@ for a program: ``done``, ``unreachable`` (the MiSTer did not answer),
 
 from __future__ import annotations
 
+import asyncio
 import secrets
 import time
 from dataclasses import dataclass
@@ -27,8 +28,12 @@ from mister_mcp.zaparoo import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Awaitable, Callable
 
+#: How many times a start is read back: a real MiSTer may show its menu while the game loads.
+READ_BACK_TRIES = 3
+#: Seconds between two read-backs; with the tries, well inside the voice's time.
+READ_BACK_GAP = 1.0
 #: Seconds a question about ending a running game stays open for its yes.
 ASK_WITHIN = 60.0
 #: What the voice hears for a token that ran out, was used, or was never given.
@@ -116,6 +121,14 @@ class _Start:
         return self.game or f"the {self.system} core"
 
 
+def _shows(active: dict[str, Any] | None, start: _Start) -> bool:
+    """Whether the MiSTer shows what `start` started: that game, or that core with no game."""
+    if not active:
+        return False
+    shows = active.get("mediaName") or None
+    return shows == start.game and bool(start.game or active.get("systemName") == start.system)
+
+
 def describe(active: dict[str, Any] | None) -> str:
     """What the MiSTer is running, as a phrase: "playing X on Y", or "at its menu"."""
     if not active:
@@ -134,12 +147,14 @@ class MisterService:
         *,
         tv: TvSwitch | None = None,
         clock: Callable[[], float] = time.monotonic,
+        pause: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
         """Reach the MiSTer through `transport`; show it on `tv` after a start, when one is set."""
         self.zaparoo = Zaparoo(transport)
         self._transport = transport
         self.tv = tv
         self._clock = clock
+        self._pause = pause
         #: Starts waiting for the owner's yes, by token, with the time each one expires.
         self._asked: dict[str, tuple[_Start, float]] = {}
 
@@ -208,6 +223,16 @@ class MisterService:
             self._asked.pop(token, None)
             return _refused(STALE, game=None, system=None)
         return await self._go(asked[0], token=token)
+
+    async def _read_back(self, start: _Start) -> dict[str, Any] | None:
+        """What the MiSTer shows after a start, read up to READ_BACK_TRIES times while it loads."""
+        active = await self.zaparoo.active()
+        for _ in range(READ_BACK_TRIES - 1):
+            if _shows(active, start):
+                break
+            await self._pause(READ_BACK_GAP)
+            active = await self.zaparoo.active()
+        return active
 
     def _ask(self, start: _Start, active: dict[str, Any]) -> dict[str, Any]:
         now = self._clock()
@@ -286,9 +311,9 @@ class MisterService:
         # The token is spent only once the start was sent, so a lost confirm can be tried again.
         self._asked.pop(token or "", None)
         # RULE: a start is said as done only once the mister shows it
-        active = await self.zaparoo.active()
+        active = await self._read_back(start)
         shows = (active or {}).get("mediaName") or None
-        if active and shows == game and (game or active.get("systemName") == system):
+        if _shows(active, start):
             say = f"Started. The MiSTer is {describe(active)}."
             return {"success": True, "outcome": "done", "say": say, "game": game, "system": system}
         say = (
