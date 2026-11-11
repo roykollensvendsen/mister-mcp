@@ -28,6 +28,7 @@ $ uv run mister-mcp serve --simulate < /dev/null
 | Tool | Does | Changes anything |
 |---|---|---|
 | `mister_status` | Whether the MiSTer is on, and the system and game it runs | No |
+| `mister_search` | Up to five games whose names hold every word said, with their systems | No |
 
 Every answer has `say`, read aloud as it is, and `success` with `outcome`
 for a program: `done`, `unreachable` (the MiSTer did not answer: off, or not

@@ -17,10 +17,23 @@ UNREACHABLE = (
     "The MiSTer is not answering, so it is off or not on the network. "
     "Switch it on, wait a minute, and ask again."
 )
+#: The most games one answer reads out; the voice cannot list a hundred.
+MAX_RESULTS = 5
 
 
 def _unreachable(**fields: Any) -> dict[str, Any]:  # noqa: ANN401
     return {"success": False, "outcome": "unreachable", "say": UNREACHABLE, **fields}
+
+
+def _game(result: dict[str, Any]) -> dict[str, str]:
+    """A search result as the voice needs it: its name and its system's name."""
+    system = result.get("system") or {}
+    return {"name": str(result.get("name", "")), "system": str(system.get("name") or system.get("id") or "")}
+
+
+def _listed(games: list[dict[str, str]]) -> str:
+    named = [f"{g['name']} on the {g['system']}" for g in games]
+    return named[0] if len(named) == 1 else ", ".join(named[:-1]) + ", and " + named[-1]
 
 
 def describe(active: dict[str, Any] | None) -> str:
@@ -54,3 +67,24 @@ class MisterService:
             "system": (active or {}).get("systemName") or None,
             "game": (active or {}).get("mediaName") or None,
         }
+
+    async def search(self, name: str) -> dict[str, Any]:
+        """The games whose names hold every word of `name`, at most MAX_RESULTS of them."""
+        try:
+            results = await self.zaparoo.search(name, max_results=MAX_RESULTS + 1)
+        except UnreachableError:
+            return _unreachable(games=[])
+        games = [_game(r) for r in results]
+        if not games:
+            return {
+                "success": False,
+                "outcome": "not_found",
+                "say": f"The MiSTer has no game called {name}. Try fewer words, or another name.",
+                "games": [],
+            }
+        more = len(games) > MAX_RESULTS
+        games = games[:MAX_RESULTS]
+        say = f"I found {_listed(games)}."
+        if more:
+            say += " There are more; say more of the name to narrow it down."
+        return {"success": True, "outcome": "done", "say": say, "games": games}

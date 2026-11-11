@@ -21,7 +21,8 @@ if TYPE_CHECKING:
     from mister_mcp.service import MisterService
 
 INSTRUCTIONS = (
-    "Says what the owner's MiSTer FPGA is playing. Read each 'say' aloud as it is. "
+    "Says what the owner's MiSTer FPGA is playing and finds its games by name. "
+    "Read each 'say' aloud as it is. "
     "No tool writes, deletes or changes anything on the MiSTer."
 )
 SIMULATED = "A SIMULATED MiSTer, not a real one: say so. "
@@ -93,5 +94,12 @@ def build_server(service: MisterService, *, simulated: bool = False) -> MCPServe
     )
     async def mister_status() -> dict[str, Any]:
         return await service.status()
+
+    @guarded.tool(
+        annotations=READ_ONLY,
+        description="Find a game by its name.\nName: words from the game's title, as the owner said them.",
+    )
+    async def mister_search(name: str) -> dict[str, Any]:
+        return await service.search(name)
 
     return server
