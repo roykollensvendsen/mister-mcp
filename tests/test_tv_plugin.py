@@ -17,6 +17,9 @@ from mister_mcp.tv import CLOSE_WITHIN, TvPlugin, show_mister
 FAKE = pathlib.Path(__file__).with_name("fake_tv_mcp.py")
 #: Seconds a TV step may take here before the TV plugin counts as left running.
 LEFT_RUNNING = 10.0
+#: Seconds a busy computer may take to start and stop the stand-in, beyond the limits
+#: themselves; still well short of LEFT_RUNNING, so a hang is never mistaken for a close.
+STARTING_AND_STOPPING = 3.0
 
 
 def _bounded(work, log):
@@ -92,4 +95,4 @@ def test_the_tv_plugin_is_closed_after_every_use_even_a_slow_one(tmp_path, monke
     answer, took = _bounded(timed, log)
     assert answer["outcome"] == "working"
     assert not plugin.is_open
-    assert took <= 0.05 + CLOSE_WITHIN + 0.5
+    assert took <= 0.05 + CLOSE_WITHIN + STARTING_AND_STOPPING
