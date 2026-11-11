@@ -8,5 +8,8 @@ versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- The walking skeleton: the thinnest path through the whole system, end to
-  end, green in CI on the first commit.
+- `mister_status`: whether the MiSTer is on, and the system and game it runs,
+  read from Zaparoo Core. A MiSTer that does not answer is said to be off or
+  off the network, never one of the two.
+- `mister-mcp serve` and `mister-mcp status`, each with `--simulate` for a
+  pretend MiSTer whose every answer says "Simulated:".
