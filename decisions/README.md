@@ -29,6 +29,8 @@ decision nobody writes down.
 
 | Id | Decides | Status |
 |---|---|---|
+| [ADR-MM-001](ADR-MM-001-build-on-zaparoo-core.md) | Build on Zaparoo Core's API, with a fixed allow-list of calls | Accepted |
+| [ADR-MM-002](ADR-MM-002-switch-the-tv-through-tv-mcps-own-tools.md) | Switch the TV through the TV plugin's own tools, only when it is on | Accepted |
 
 What is deliberately left undone, and what would make each worth doing, is
 [`deferred.md`](deferred.md). A thing left undone with no trigger is a thing
