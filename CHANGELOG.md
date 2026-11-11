@@ -8,6 +8,9 @@ versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The commands the voice suggests run as typed: `uv run --directory
+  ~/mister-mcp mister-mcp status`, and the TV plugin's own command from the
+  settings with `status` in place of `serve`.
 - A launch while a game runs asks first, naming the game it would end.
   `mister_launch_confirm` with the question's one-time token, within a
   minute, starts the new one. From the menu, a launch starts at once.

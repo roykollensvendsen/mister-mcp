@@ -36,9 +36,11 @@ WORKING = "That is taking a while, and it carries on. Ask again in a moment to h
 #: What the voice hears when a start is still going by then. Asking again would start it twice.
 LAUNCH_WORKING = "The start is taking a while, and it carries on. Ask what it is playing in a moment."
 #: What the voice hears when mister-mcp itself fails, so it never hears only that the tool failed.
+#: The command that shows what is wrong, as typed: mister-mcp is not on the PATH, so uv runs it.
+MISTER_STATUS = "uv run --directory ~/mister-mcp mister-mcp status"
 BROKE = (
     "That went wrong inside mister-mcp. Try again. "
-    "If it fails again, run mister-mcp status in a terminal to see what is wrong."
+    f"If it fails again, run {MISTER_STATUS} in a terminal to see what is wrong."
 )
 
 READ_ONLY = ToolAnnotations(read_only_hint=True)
