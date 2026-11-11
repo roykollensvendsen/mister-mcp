@@ -8,6 +8,9 @@ versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A start Zaparoo refuses is said in plain words, by its error category,
+  with what to do next; Zaparoo's own message is never read aloud. A start
+  that timed out or was cut off is said as not yet known, not as refused.
 - A start is read back up to three times, a second apart, so a game a real
   MiSTer is still loading is not said to have failed.
 - The commands the voice suggests run as typed: `uv run --directory

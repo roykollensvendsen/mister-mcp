@@ -51,6 +51,8 @@ class SimulatedMister:
         self.extra_result: dict[str, Any] | None = None
         #: When set, a start is acknowledged but the MiSTer keeps showing what it showed.
         self.ignores_runs = False
+        #: When set, every start is refused with this (message, category), as Zaparoo would.
+        self.run_error: tuple[str, str | None] | None = None
         #: How many reads after a start still show what ran before, as a real MiSTer loading a game.
         self.loads_after = 0
         self._loading = 0
@@ -118,6 +120,11 @@ class SimulatedMister:
         return found[: int(params.get("maxResults", 100))]
 
     def _run(self, text: str) -> dict[str, Any]:
+        if self.run_error:
+            message, category = self.run_error
+            return {
+                "error": {"code": 1, "message": message, "data": {"category": category} if category else {}}
+            }
         if self.ignores_runs:
             return {"result": None}
         self._before, self._loading = self.active, self.loads_after

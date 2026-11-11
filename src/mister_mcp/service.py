@@ -30,6 +30,43 @@ from mister_mcp.zaparoo import (
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+#: What the voice hears when Zaparoo refuses a start, by the category of its error
+#: (zaparoo.org/docs/core/api/methods, Core 2.22.1). Zaparoo's own message is never read aloud.
+REFUSALS = {
+    "busy": "The MiSTer is busy starting something else. Wait a moment, then ask what it is playing.",
+    "media_not_found": (
+        "The MiSTer could not find that game's file. "
+        "Search for it again, or start it from the MiSTer's own menu."
+    ),
+    "disabled": "Zaparoo on the MiSTer has starting games switched off. Turn it on in Zaparoo's settings.",
+    "invalid_script": (
+        "Zaparoo did not understand the start it was sent. Start it from the MiSTer's own menu."
+    ),
+    "blocked": (
+        "Zaparoo's own settings on the MiSTer refused the start. "
+        "Check Zaparoo's settings, or start it from the MiSTer's own menu."
+    ),
+    "playtime_limit": (
+        "A playtime limit on the MiSTer stopped the start. "
+        "Change the limit in Zaparoo's settings to play now."
+    ),
+    "timeout": (
+        "The MiSTer took long to start it, and may still be starting. Ask what it is playing in a moment."
+    ),
+    "cancelled": "The start was cut off, and may still go through. Ask what it is playing in a moment.",
+    "unavailable": "Zaparoo on the MiSTer is shutting down. Wait a minute, then try the start once more.",
+    "launch_repair": (
+        "The MiSTer needs a hand before it can start that, such as a missing core or SD card. "
+        "Start it from the MiSTer's own menu to see what it asks for."
+    ),
+    "execution_failed": (
+        "The MiSTer could not start it. Try once more, or start it from the MiSTer's own menu."
+    ),
+}
+#: What the voice hears for a refusal with no category, or one Zaparoo added since.
+REFUSED = "The MiSTer did not start it. Ask what it is playing, or start it from the MiSTer's own menu."
+#: Refusals after which the start may still go through, so they are not called refused.
+MAY_STILL_START = frozenset({"timeout", "cancelled"})
 #: How many times a start is read back: a real MiSTer may show its menu while the game loads.
 READ_BACK_TRIES = 3
 #: Seconds between two read-backs; with the tries, well inside the voice's time.
@@ -306,8 +343,17 @@ class MisterService:
             await self.zaparoo.run(start.text)
         except ZaparooError as error:
             self._asked.pop(token or "", None)
-            say = f"The MiSTer did not start it: {error}. Try again, or ask what it is playing."
-            return _refused(say, game=None, system=None, reason=error.category)
+            # RULE: zaparoos own words are never read aloud
+            say = REFUSALS.get(error.category or "", REFUSED)
+            outcome = "unverified" if error.category in MAY_STILL_START else "refused"
+            return {
+                "success": False,
+                "outcome": outcome,
+                "say": say,
+                "game": None,
+                "system": None,
+                "reason": error.category,
+            }
         # The token is spent only once the start was sent, so a lost confirm can be tried again.
         self._asked.pop(token or "", None)
         # RULE: a start is said as done only once the mister shows it
