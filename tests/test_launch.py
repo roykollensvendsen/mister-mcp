@@ -124,9 +124,19 @@ def test_a_tv_plugin_without_tv_input_leaves_the_tv_alone():
 
 
 def test_the_tv_is_touched_only_once_the_game_started():
-    tv = SimulatedTvPlugin(screen="on")
-    _launch(tv=tv, game="no such game")
-    assert tv.calls == []
+    refusing = SimulatedMister()
+    refusing.extra_result = {
+        "name": "Lost Cart",
+        "zapScript": "@NES/Lost Cart",
+        "system": {"id": "NES", "name": "Nintendo Entertainment System"},
+    }
+    ignoring = SimulatedMister()
+    ignoring.ignores_runs = True
+    for mister, said in ((None, "no such game"), (refusing, "lost cart"), (ignoring, "micro mages")):
+        tv = SimulatedTvPlugin(screen="on")
+        answer = _launch(mister, tv=tv, game=said)
+        assert answer["success"] is False, said
+        assert tv.calls == [], said
 
 
 def test_a_hands_off_tv_is_never_sent_an_input():
