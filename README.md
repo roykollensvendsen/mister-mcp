@@ -36,6 +36,10 @@ for a program: `done`, `unreachable` (the MiSTer did not answer: off, or not
 on the network), `not_found`, `refused`, or `working` (still going after the
 voice's time, and carrying on).
 
+Which actions are risky is the owner's call (the plugin standard's rule 7).
+Starting a game is not; the one that will be, switching the MiSTer's power
+through a smart plug, is not built yet and will ask first.
+
 ## Settings
 
 In `~/.config/mister-mcp/config.toml`, never in this repository:

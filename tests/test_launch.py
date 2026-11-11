@@ -127,3 +127,16 @@ def test_the_tv_is_touched_only_once_the_game_started():
     tv = SimulatedTvPlugin(screen="on")
     _launch(tv=tv, game="no such game")
     assert tv.calls == []
+
+
+def test_a_hands_off_tv_is_never_sent_an_input():
+    # tv-mcp answers for a TV the owner marked to be left alone without a screen state.
+    class HandsOff(SimulatedTvPlugin):
+        async def _send(self, tool, arguments):
+            self.calls.append((tool, arguments))
+            return {"success": False, "outcome": "refused", "say": "The den is left alone."}
+
+    tv = HandsOff()
+    answer = _launch(tv=tv, game="micro mages")
+    assert [name for name, _ in tv.calls] == ["tv_status"]
+    assert answer["tv"]["outcome"] == "left_alone"
