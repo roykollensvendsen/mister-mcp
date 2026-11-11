@@ -4,7 +4,9 @@
 import asyncio
 import json
 import pathlib
+import subprocess
 import sys
+import threading
 
 import pytest
 
@@ -13,13 +15,32 @@ from mister_mcp.settings import SettingsError
 from mister_mcp.tv import CLOSE_WITHIN, TvPlugin, show_mister
 
 FAKE = pathlib.Path(__file__).with_name("fake_tv_mcp.py")
+#: Seconds a TV step may take here before the TV plugin counts as left running.
+LEFT_RUNNING = 10.0
+
+
+def _bounded(work, log):
+    """Run `work()` to its end, or fail when a TV plugin left running keeps it from ending.
+
+    An unclosed stand-in keeps asyncio.run waiting for ever; stopping it by its
+    own log path lets the test fail and say so instead of hanging the suite.
+    """
+    box = {}
+    thread = threading.Thread(target=lambda: box.setdefault("answer", asyncio.run(work())), daemon=True)
+    thread.start()
+    thread.join(LEFT_RUNNING)
+    if thread.is_alive():
+        subprocess.run(["pkill", "-f", str(log)], check=False)
+        thread.join(LEFT_RUNNING)
+        pytest.fail("the TV plugin was left running")
+    return box["answer"]
 
 
 def _show(tmp_path, screen):
     log = tmp_path / "calls.log"
     log.touch()
     plugin = TvPlugin(command=[sys.executable, str(FAKE), screen, str(log)], tv="the den", device="Game box")
-    answer = asyncio.run(show_mister(plugin))
+    answer = _bounded(lambda: show_mister(plugin), log)
     return answer, [json.loads(line)[0] for line in log.read_text().splitlines()], plugin
 
 
@@ -68,7 +89,7 @@ def test_the_tv_plugin_is_closed_after_every_use_even_a_slow_one(tmp_path, monke
         answer = await show_mister(plugin)
         return answer, loop.time() - began
 
-    answer, took = asyncio.run(timed())
+    answer, took = _bounded(timed, log)
     assert answer["outcome"] == "working"
     assert not plugin.is_open
     assert took <= 0.05 + CLOSE_WITHIN + 0.5
