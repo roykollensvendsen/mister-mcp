@@ -192,14 +192,14 @@ replace = 'say = f"{error}. " + REFUSALS.get(error.category or "", REFUSED)'
 [[rule]]
 name = "only a command from the fixed list is ever sent over ssh"
 file = "src/mister_mcp/ssh.py"
-find = '        if name not in ALLOWED_COMMANDS:\n            msg = f"\{name!r\} is not a command this plugin sends"\n            raise NotAllowedCommandError\(msg\)\n        return \["ssh"'
-replace = '        if False:\n            raise NotAllowedCommandError(name)\n        return ["ssh"'
+find = '        if name not in ALLOWED_COMMANDS:'
+replace = '        if False:'
 
 [[rule]]
 name = "a full sd card is said in plain words"
 file = "src/mister_mcp/updater.py"
-find = '    if "is FULL" in text:\n        return "failed", SD_FULL'
-replace = '    if False:\n        return "failed", SD_FULL'
+find = '    if "is FULL" in text:'
+replace = '    if False:'
 
 [[rule]]
 name = "an update token works once and only while fresh"
@@ -222,5 +222,5 @@ replace = '        if False:'
 [[rule]]
 name = "a running game is named in the question"
 file = "src/mister_mcp/updater.py"
-find = '        if active:\n            return f"The MiSTer is'
-replace = '        if False:\n            return f"The MiSTer is'
+find = '        if active:'
+replace = '        if False:'
