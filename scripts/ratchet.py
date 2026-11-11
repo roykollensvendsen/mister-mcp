@@ -56,8 +56,9 @@ LAYERS = {
         ("_version", "zaparoo", "tv", "ssh"), 0
     ),  # talking to one thing: Zaparoo, the TV plugin, SSH
     **dict.fromkeys(("settings", "simulator", "service"), 1),  # built on those
-    "server": 2,  # the tools the voice calls
-    "cli": 3,  # the command line that starts it
+    "updater": 2,  # update_all, which names a game the way the service does
+    "server": 3,  # the tools the voice calls
+    "cli": 4,  # the command line that starts it
 }
 DEFAULT_BUDGET = {"seconds": 60, "tolerance": 0.25}
 NEW_MODULE_CEILING = 15  # the most tangled function a new module may have

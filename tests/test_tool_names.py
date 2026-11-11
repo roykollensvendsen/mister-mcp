@@ -10,7 +10,8 @@ import difflib
 
 from mister_mcp.server import build_server
 from mister_mcp.service import MisterService
-from mister_mcp.simulator import SimulatedMister
+from mister_mcp.simulator import SimulatedMister, SimulatedShell
+from mister_mcp.updater import UpdateService
 
 #: Pairs that look or sound alike: search and launch share most letters, and
 #: status and search both open with "s" when said aloud.
@@ -18,13 +19,18 @@ CONFUSABLE = {
     frozenset({"mister_search", "mister_launch"}),
     frozenset({"mister_launch", "mister_launch_confirm"}),
     frozenset({"mister_status", "mister_search"}),
+    frozenset({"mister_status", "mister_update_status"}),
+    frozenset({"mister_launch_confirm", "mister_update_confirm"}),
+    frozenset({"mister_update_request", "mister_update_status"}),
 }
 #: How alike two names may be, as difflib reckons it, before the pair must be listed.
 ALIKE = 0.75
 
 
 def _tools():
-    return asyncio.run(build_server(MisterService(SimulatedMister())).list_tools())
+    mister = SimulatedMister()
+    updater = UpdateService(SimulatedShell(), mister, history=None)
+    return asyncio.run(build_server(MisterService(mister), updater=updater).list_tools())
 
 
 def test_no_two_tool_names_can_be_confused():
@@ -45,6 +51,7 @@ def test_the_names_that_sound_alike_open_with_different_words():
 
 def test_no_tool_switches_power():
     # Power through a smart plug is not built; it will be a request and a confirm
-    # (decisions/deferred.md). The one confirm today is ending a running game.
+    # (decisions/deferred.md). The confirms today end a running game, and start update_all.
     assert not [t.name for t in _tools() if "power" in t.name]
-    assert [t.name for t in _tools() if "confirm" in t.name] == ["mister_launch_confirm"]
+    confirms = sorted(t.name for t in _tools() if "confirm" in t.name)
+    assert confirms == ["mister_launch_confirm", "mister_update_confirm"]

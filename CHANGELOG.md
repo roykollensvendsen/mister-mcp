@@ -8,6 +8,11 @@ versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- update_all by voice (ADR-MM-004): `mister_update_request` checks and asks,
+  naming a running game and refusing below 512 MB free, while a run is
+  going, or just after the MiSTer started; `mister_update_confirm` starts it
+  on the owner's yes; `mister_update_status` says its step, about how long
+  is left, and how it ended. Every SSH command comes from a fixed list.
 - The quality ratchet counts layer violations: each module has a layer, and
   may import at load time only from the layers below it.
 - SSH to the MiSTer is by key only: password and keyboard login are off,

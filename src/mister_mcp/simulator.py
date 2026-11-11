@@ -8,9 +8,13 @@ sent, so a test can say what reached the MiSTer.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
+from mister_mcp.ssh import ALLOWED_COMMANDS, SSH_FAILED, NotAllowedCommandError, Reply
 from mister_mcp.zaparoo import UnreachableError, ZaparooNotRunningError
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 #: The address set aside for documentation, never anyone's real MiSTer.
 ADDRESS = "192.0.2.10"
@@ -139,3 +143,79 @@ class SimulatedMister:
                 self.play(system, name)
                 return {"result": None}
         return {"error": {"code": 1, "message": "media not found", "data": {"category": "media_not_found"}}}
+
+
+class SimulatedShell:
+    """A pretend MiSTer over SSH: answers the fixed commands as a MiSTer would, and keeps what it was sent."""
+
+    def __init__(  # noqa: PLR0913 - each is one thing a test sets about the MiSTer
+        self,
+        *,
+        free_mb: int | None = 4096,
+        running: bool = False,
+        uptime: float = 3600.0,
+        live_log: list[str] | None = None,
+        saved_log: list[str] | None = None,
+        key_refused: bool = False,
+        on: bool = True,
+    ) -> None:
+        """A MiSTer with `free_mb` free on its SD card, up for `uptime` seconds."""
+        self.free_mb, self.running, self.uptime = free_mb, running, uptime
+        self.live_log, self.saved_log = live_log, saved_log
+        self.key_refused, self.on = key_refused, on
+        #: The names of the commands sent, in order.
+        self.sent: list[str] = []
+
+    async def run(self, name: str) -> Reply:
+        """The MiSTer's reply to the command called `name`."""
+        if name not in ALLOWED_COMMANDS:
+            msg = f"{name!r} is not a command this plugin sends"
+            raise NotAllowedCommandError(msg)
+        if not self.on:
+            said = f"ssh: connect to host {ADDRESS} port 22: Connection timed out"
+            return Reply(SSH_FAILED, "", said, ADDRESS)
+        if self.key_refused:
+            return Reply(SSH_FAILED, "", f"root@{ADDRESS}: Permission denied (publickey).", ADDRESS)
+        self.sent.append(name)
+        answers: dict[str, Callable[[], Reply]] = {
+            "free_space": self._free_space,
+            "running": self._running,
+            "uptime": self._uptime,
+            "live_log": self._live_log,
+            "saved_log": self._saved_log,
+            "start": self._start,
+        }
+        return answers[name]()
+
+    def _reply(self, out: str, code: int = 0) -> Reply:
+        return Reply(code, out, "", ADDRESS)
+
+    def _free_space(self) -> Reply:
+        if self.free_mb is None:  # a df whose answer cannot be read
+            return self._reply("df: unrecognised output\n")
+        free = self.free_mb * 1024
+        return self._reply(
+            "Filesystem 1024-blocks Used Available Capacity Mounted on\n"
+            f"/dev/mmcblk0p1 31000000 {31000000 - free} {free} 90% /media/fat\n"
+        )
+
+    def _running(self) -> Reply:
+        return self._reply("1234\n", 0) if self.running else self._reply("", 1)
+
+    def _uptime(self) -> Reply:
+        return self._reply(f"{self.uptime:.2f} 100.00\n")
+
+    def _live_log(self) -> Reply:
+        return self._log(self.live_log)
+
+    def _saved_log(self) -> Reply:
+        return self._log(self.saved_log)
+
+    def _log(self, lines: list[str] | None) -> Reply:
+        if lines is None:
+            return Reply(1, "", "tail: can't open: No such file or directory", ADDRESS)
+        return self._reply("\n".join(lines) + "\n")
+
+    def _start(self) -> Reply:
+        self.running, self.live_log = True, ["Update All 2.3"]
+        return self._reply("")
