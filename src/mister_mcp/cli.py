@@ -10,9 +10,11 @@ from typing import TYPE_CHECKING
 
 from mister_mcp.server import build_server
 from mister_mcp.service import MisterService
-from mister_mcp.settings import SettingsError, load_settings, settings_path
-from mister_mcp.simulator import SimulatedMister
+from mister_mcp.settings import FOLDER, SettingsError, load_settings, settings_path
+from mister_mcp.simulator import SimulatedMister, SimulatedShell
+from mister_mcp.ssh import SshShell
 from mister_mcp.tv import SimulatedTvPlugin, TvPlugin, TvSwitch
+from mister_mcp.updater import UpdateService
 from mister_mcp.zaparoo import FallbackTransport, WebSocketTransport, connect_wait_for
 
 if TYPE_CHECKING:
@@ -23,9 +25,17 @@ if TYPE_CHECKING:
 COMMANDS: tuple[str, ...] = ("serve", "status")
 
 
-def _service(*, simulate: bool, settings_file: str | None) -> MisterService:
+#: The SSH key the MiSTer accepts, alone in its file, never printed.
+SSH_KEY = FOLDER / "ssh-key"
+#: How long past update_all runs took, for the next estimate.
+UPDATE_RUNS = FOLDER / "update-runs.json"
+
+
+def _service(*, simulate: bool, settings_file: str | None) -> tuple[MisterService, UpdateService]:
     if simulate:
-        return MisterService(SimulatedMister(), tv=SimulatedTvPlugin())
+        mister = SimulatedMister()
+        updater = UpdateService(SimulatedShell(), mister, history=None)
+        return MisterService(mister, tv=SimulatedTvPlugin()), updater
     path = pathlib.Path(settings_file).expanduser() if settings_file else settings_path()
     settings = load_settings(path)
     where = settings.where()
@@ -38,7 +48,9 @@ def _service(*, simulate: bool, settings_file: str | None) -> MisterService:
         return WebSocketTransport(address, port=settings.port, api_key=settings.api_key, connect_wait=wait)
 
     transport: Transport = FallbackTransport(where, reach=reach)
-    return MisterService(transport, tv=tv_from(settings.tv))
+    shell = SshShell(where, key_file=str(SSH_KEY))
+    updater = UpdateService(shell, transport, history=UPDATE_RUNS.expanduser())
+    return MisterService(transport, tv=tv_from(settings.tv)), updater
 
 
 def tv_from(table: dict[str, object]) -> TvSwitch | None:
@@ -63,12 +75,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--settings-file", help="instead of ~/.config/mister-mcp/config.toml")
     args = parser.parse_args(argv)
     try:
-        service = _service(simulate=args.simulate, settings_file=args.settings_file)
+        service, updater = _service(simulate=args.simulate, settings_file=args.settings_file)
     except SettingsError as error:
         sys.stderr.write(f"mister-mcp: {error}\n")
         return 2
     if args.command == "serve":  # pragma: no cover - runs until stdin closes
-        asyncio.run(build_server(service, simulated=args.simulate).run_stdio_async())
+        asyncio.run(build_server(service, updater=updater, simulated=args.simulate).run_stdio_async())
         return 0
     answer = asyncio.run(service.status())
     prefix = "Simulated: " if args.simulate else ""

@@ -31,6 +31,9 @@ $ uv run mister-mcp serve --simulate < /dev/null
 | `mister_search` | Up to five games whose names hold every word said, with their systems | No |
 | `mister_launch` | Starts a game by name, or a system's core alone, reads back what runs, then shows it on the TV if that TV is already on. While a game runs, it asks first | Starts a game |
 | `mister_launch_confirm` | The owner's yes to that question, with its one-time token: ends the running game and starts the one asked for | Starts a game |
+| `mister_update_request` | Checks that update_all may run (512 MB free, none running, the MiSTer up two minutes) and asks, naming a running game | No |
+| `mister_update_confirm` | The owner's yes, with its one-time token: starts update_all, which may restart the MiSTer | Updates the MiSTer |
+| `mister_update_status` | Whether update_all runs, its current step and about how long is left, or how it ended | No |
 
 Every answer has `say`, read aloud as it is, and `success` with `outcome`
 for a program: `done`, `unreachable` (the MiSTer did not answer: off, or not
@@ -44,6 +47,10 @@ while a game or core runs is a question that names what runs, and only
 `mister_launch_confirm` with its token, within a minute, starts the new one.
 Switching the MiSTer's power through a smart plug will be risky too; it is not
 built yet.
+
+update_all runs over SSH by key only, and only commands from a fixed list
+are ever sent ([ADR-MM-004](decisions/ADR-MM-004-run-update-all-over-ssh-from-a-fixed-list.md)).
+The key the MiSTer accepts sits alone in `~/.config/mister-mcp/ssh-key`.
 
 ## Settings
 

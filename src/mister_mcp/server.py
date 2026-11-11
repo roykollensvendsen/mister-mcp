@@ -19,14 +19,16 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from mister_mcp.service import MisterService
+    from mister_mcp.updater import UpdateService
 
 INSTRUCTIONS = (
     "Says what the owner's MiSTer FPGA is playing and finds its games by name. "
     "Read each 'say' aloud as it is. "
     "Start a game only when the owner asks for it now. When a game is running, mister_launch asks first: "
     "read its question, and call mister_launch_confirm with its token only if the owner clearly says yes. "
-    "No tool writes, deletes or changes a setting "
-    "on the MiSTer, and none switches a TV on."
+    "update_all is the same: mister_update_request asks, and only the owner's clear yes goes to "
+    "mister_update_confirm; mister_update_status says how it is going. "
+    "Only update_all changes files on the MiSTer, and no tool switches a TV on."
 )
 SIMULATED = "A SIMULATED MiSTer, not a real one: say so. "
 #: The Claude app gives up on a call after about 15 seconds; every tool answers before then.
@@ -96,8 +98,10 @@ def _ended(work: asyncio.Future[Any]) -> None:
         work.exception()
 
 
-def build_server(service: MisterService, *, simulated: bool = False) -> MCPServer[Any]:
-    """The MCP server with the MiSTer's tools."""
+def build_server(
+    service: MisterService, *, updater: UpdateService | None = None, simulated: bool = False
+) -> MCPServer[Any]:
+    """The MCP server with the MiSTer's tools; the update_all tools only with an `updater`."""
     server: MCPServer[Any] = MCPServer(
         name="mister-simulated" if simulated else "mister",
         instructions=(SIMULATED + INSTRUCTIONS) if simulated else INSTRUCTIONS,
@@ -141,4 +145,37 @@ def build_server(service: MisterService, *, simulated: bool = False) -> MCPServe
     async def mister_launch_confirm(token: str) -> dict[str, Any]:
         return await service.confirm(token)
 
+    if updater is not None:
+        _update_tools(guarded, updater)
     return server
+
+
+def _update_tools(guarded: _Guarded, updater: UpdateService) -> None:
+    """update_all by voice (ADR-MM-004): ask, the owner's yes, then how it is going."""
+
+    @guarded.tool(
+        annotations=READ_ONLY,
+        description=(
+            "Update the MiSTer with update_all.\nAsks first and starts nothing: checks the free space"
+            " and names a running game. Read its question aloud."
+        ),
+    )
+    async def mister_update_request() -> dict[str, Any]:
+        return await updater.request()
+
+    @guarded.tool(
+        annotations=CHANGES,
+        description=(
+            "Go ahead with update_all.\nOnly after the owner clearly said yes to the question"
+            " mister_update_request asked. Token: the one that question gave."
+        ),
+    )
+    async def mister_update_confirm(token: str) -> dict[str, Any]:
+        return await updater.confirm(token)
+
+    @guarded.tool(
+        annotations=READ_ONLY,
+        description="How is the update going?\nWhether update_all runs, its current step, and how it ended.",
+    )
+    async def mister_update_status() -> dict[str, Any]:
+        return await updater.status()
