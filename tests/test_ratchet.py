@@ -181,6 +181,35 @@ def _package(root, files):
         path.write_text(text)
 
 
+def test_a_module_that_reaches_up_a_layer_fails_the_check(tmp_path):
+    pkg = tmp_path / "pkg"
+    _package(
+        pkg,
+        {
+            "__init__.py": "",
+            "low.py": "from pkg import high\n",
+            "mid.py": "from . import low\n",
+            "high.py": "from .mid import thing\n\ndef later():\n    from . import high\n",
+            "loose.py": "",
+        },
+    )
+    layers = {"low": 0, "mid": 1, "high": 2}
+    assert ratchet.layer_breaches(pkg, layers) == [
+        "loose has no layer",
+        "low (layer 0) imports high (layer 2)",
+    ]
+
+
+def test_a_module_may_not_import_another_in_its_own_layer(tmp_path):
+    pkg = tmp_path / "pkg"
+    _package(pkg, {"__init__.py": "", "a.py": "from . import b\n", "b.py": ""})
+    assert ratchet.layer_breaches(pkg, {"a": 1, "b": 1}) == ["a (layer 1) imports b (layer 1)"]
+
+
+def test_every_module_of_the_plugin_has_a_layer_and_keeps_to_it():
+    assert ratchet.layer_breaches(ratchet.PACKAGE, ratchet.LAYERS) == []
+
+
 def test_a_cycle_among_the_modules_is_counted_and_a_lazy_import_is_not(tmp_path):
     pkg = tmp_path / "pkg"
     _package(

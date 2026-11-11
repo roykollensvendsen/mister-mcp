@@ -3,7 +3,7 @@
 """The quality ratchet: the code may get better or stay as it is, never worse unless a change says why.
 
 It measures test coverage, the share of rules whose own test notices them switched off, the
-number of tests, lint and type errors, import cycles among the modules, copied code, and the
+number of tests, lint and type errors, import cycles and layers among the modules, copied code, and the
 most tangled function in each module, and compares them with the levels main reached. A
 change that makes one worse fails, unless its pull request has a line of its own
 
@@ -49,7 +49,16 @@ SOURCE = ROOT / "src"
 PACKAGE = SOURCE / "mister_mcp"
 COVERAGE_WOBBLE = 0.5  # percentage points: coverage differs slightly between machines and versions
 HIGHER = ("coverage", "mutation", "tests")
-LOWER = ("lint_errors", "type_errors", "cycles", "duplication")
+LOWER = ("lint_errors", "type_errors", "cycles", "layer_violations", "duplication")
+# Each module's layer: a module may use, when it loads, only modules in the layers below it.
+LAYERS = {
+    **dict.fromkeys(
+        ("_version", "zaparoo", "tv", "ssh"), 0
+    ),  # talking to one thing: Zaparoo, the TV plugin, SSH
+    **dict.fromkeys(("settings", "simulator", "service"), 1),  # built on those
+    "server": 2,  # the tools the voice calls
+    "cli": 3,  # the command line that starts it
+}
 DEFAULT_BUDGET = {"seconds": 60, "tolerance": 0.25}
 NEW_MODULE_CEILING = 15  # the most tangled function a new module may have
 BLOCK = 6  # lines in a row that count as a copied block
@@ -148,6 +157,24 @@ def _imports(name: str, path: Path, package: str, names: set[str]) -> set[str]:
                     prefixes = (".".join(parts[1:i]) for i in range(len(parts), 1, -1))
                     found |= {next((p for p in prefixes if p in names), "")} & names
     return found - {name}
+
+
+def layer_breaches(package_dir: Path, layers: dict[str, int]) -> list[str]:
+    """Every load-time import that reaches up or sideways, and every module with no layer."""
+    modules = _modules(package_dir)
+    names = set(modules)
+    found = []
+    for name, path in sorted(modules.items()):
+        if name not in layers:
+            found.append(f"{name} has no layer")
+            continue
+        # RULE: a module that reaches up a layer fails the check
+        found.extend(
+            f"{name} (layer {layers[name]}) imports {used} (layer {layers[used]})"
+            for used in sorted(_imports(name, path, package_dir.name, names))
+            if used in layers and layers[used] >= layers[name]
+        )
+    return found
 
 
 def cycles(package_dir: Path) -> int:
@@ -252,6 +279,7 @@ def measure(*, skip_mutation: bool = False, recorded: dict[str, Any] | None = No
         "lint_errors": len(json.loads(lint.stdout or "[]")),
         "type_errors": int(type_errors[1]) if type_errors else 0,
         "cycles": cycles(PACKAGE),
+        "layer_violations": len(layer_breaches(PACKAGE, LAYERS)),
         "duplication": duplication(SOURCE),
         "complexity": complexity(SOURCE),
         "test_seconds": seconds,
