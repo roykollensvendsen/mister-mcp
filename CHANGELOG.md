@@ -8,6 +8,8 @@ versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The quality ratchet counts layer violations: each module has a layer, and
+  may import at load time only from the layers below it.
 - SSH to the MiSTer is by key only: password and keyboard login are off,
   and no password is written anywhere, not even the factory default. A
   settings file holding a password is refused. A refused key is said with
