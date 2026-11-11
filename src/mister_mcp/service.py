@@ -3,12 +3,16 @@
 
 Every answer has ``say``, read aloud as it is, and ``success`` with ``outcome``
 for a program: ``done``, ``unreachable`` (the MiSTer did not answer),
-``not_found``, ``refused``, ``working`` (still going after the voice's time).
+``not_found``, ``refused``, ``working`` (still going after the voice's time),
+``ask`` (a question to read aloud, confirmed with its ``token``).
 """
 
 from __future__ import annotations
 
-from typing import Any
+import secrets
+import time
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 from mister_mcp.tv import TvSwitch, show_mister
 from mister_mcp.zaparoo import (
@@ -21,6 +25,14 @@ from mister_mcp.zaparoo import (
     game_text,
     system_text,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+#: Seconds a question about ending a running game stays open for its yes.
+ASK_WITHIN = 60.0
+#: What the voice hears for a token that ran out, was used, or was never given.
+STALE = "That question has run out, or was already answered. Ask me to start it again."
 
 #: What the voice hears when Zaparoo on the MiSTer does not answer.
 UNREACHABLE = (
@@ -92,6 +104,18 @@ def _which_system(said: str, fits: list[dict[str, Any]], systems: list[dict[str,
     return f"The MiSTer has no system called {said}. It has {shown}. Say one of those."
 
 
+@dataclass(frozen=True)
+class _Start:
+    """A start worked out but not yet sent: the text Zaparoo runs, and what it starts."""
+
+    text: str
+    game: str | None
+    system: str | None
+
+    def named(self) -> str:
+        return self.game or f"the {self.system} core"
+
+
 def describe(active: dict[str, Any] | None) -> str:
     """What the MiSTer is running, as a phrase: "playing X on Y", or "at its menu"."""
     if not active:
@@ -104,11 +128,20 @@ def describe(active: dict[str, Any] | None) -> str:
 class MisterService:
     """The MiSTer, reached through Zaparoo Core."""
 
-    def __init__(self, transport: Transport, *, tv: TvSwitch | None = None) -> None:
+    def __init__(
+        self,
+        transport: Transport,
+        *,
+        tv: TvSwitch | None = None,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
         """Reach the MiSTer through `transport`; show it on `tv` after a start, when one is set."""
         self.zaparoo = Zaparoo(transport)
         self._transport = transport
         self.tv = tv
+        self._clock = clock
+        #: Starts waiting for the owner's yes, by token, with the time each one expires.
+        self._asked: dict[str, tuple[_Start, float]] = {}
 
     async def status(self) -> dict[str, Any]:
         """Whether the MiSTer answers, and what it is running."""
@@ -156,7 +189,46 @@ class MisterService:
     async def launch(self, game: str | None = None, system: str | None = None) -> dict[str, Any]:
         """Start a game by its name, or a system's core alone; then show the MiSTer on the TV."""
         try:
-            started = await self._start(game, system)
+            start = await self._start(game, system)
+            if not isinstance(start, _Start):
+                return start
+            active = await self.zaparoo.active()
+        except UnreachableError as error:
+            return _unreachable(error, game=None, system=None)
+        # RULE: a running game is never ended without a yes
+        if active:
+            return self._ask(start, active)
+        return await self._go(start)
+
+    async def confirm(self, token: str) -> dict[str, Any]:
+        """The owner's yes to the start a launch asked about: start it now."""
+        asked = self._asked.get(token)
+        # RULE: a token works once and only while fresh
+        if asked is None or self._clock() > asked[1]:
+            self._asked.pop(token, None)
+            return _refused(STALE, game=None, system=None)
+        return await self._go(asked[0], token=token)
+
+    def _ask(self, start: _Start, active: dict[str, Any]) -> dict[str, Any]:
+        now = self._clock()
+        self._asked = {t: a for t, a in self._asked.items() if a[1] >= now}
+        token = secrets.token_urlsafe(12)
+        self._asked[token] = (start, now + ASK_WITHIN)
+        say = f"The MiSTer is {describe(active)}. Do you want me to end it and start {start.named()}?"
+        return {
+            "success": False,
+            "outcome": "ask",
+            "say": say,
+            "token": token,
+            "expires_in": ASK_WITHIN,
+            "game": None,
+            "system": None,
+        }
+
+    async def _go(self, start: _Start, *, token: str | None = None) -> dict[str, Any]:
+        """Send `start`, then show the MiSTer on the TV once the MiSTer shows it."""
+        try:
+            started = await self._run(start, token=token)
         except UnreachableError as error:
             return _unreachable(error, game=None, system=None)
         if not started["success"] or self.tv is None:
@@ -165,7 +237,7 @@ class MisterService:
         tv = await show_mister(self.tv)
         return started | {"say": f"{started['say']} {tv['say']}", "tv": tv}
 
-    async def _start(self, game: str | None, system: str | None) -> dict[str, Any]:
+    async def _start(self, game: str | None, system: str | None) -> dict[str, Any] | _Start:
         systems = await self.zaparoo.systems()
         chosen: dict[str, Any] | None = None
         if system:
@@ -178,9 +250,9 @@ class MisterService:
         if chosen is None:
             return _refused("Say a game, or a system to start with no game.", game=None, system=None)
         text = system_text(str(chosen["id"]), [str(s.get("id")) for s in systems])
-        return await self._run(text, game=None, system=str(chosen.get("name")))
+        return _Start(text, None, str(chosen.get("name")))
 
-    async def _start_game(self, game: str, system: dict[str, Any] | None) -> dict[str, Any]:
+    async def _start_game(self, game: str, system: dict[str, Any] | None) -> dict[str, Any] | _Start:
         results = await self.zaparoo.search(game, max_results=MAX_RESULTS + 1)
         if system is not None:
             results = [r for r in results if (r.get("system") or {}).get("id") == system.get("id")]
@@ -201,14 +273,18 @@ class MisterService:
                 "Start it from the MiSTer's own menu."
             )
             return _refused(say, game=None, system=None)
-        return await self._run(text, game=found["name"], system=found["system"])
+        return _Start(text, found["name"], found["system"])
 
-    async def _run(self, text: str, *, game: str | None, system: str | None) -> dict[str, Any]:
+    async def _run(self, start: _Start, *, token: str | None) -> dict[str, Any]:
+        game, system = start.game, start.system
         try:
-            await self.zaparoo.run(text)
+            await self.zaparoo.run(start.text)
         except ZaparooError as error:
+            self._asked.pop(token or "", None)
             say = f"The MiSTer did not start it: {error}. Try again, or ask what it is playing."
             return _refused(say, game=None, system=None, reason=error.category)
+        # The token is spent only once the start was sent, so a lost confirm can be tried again.
+        self._asked.pop(token or "", None)
         # RULE: a start is said as done only once the mister shows it
         active = await self.zaparoo.active()
         shows = (active or {}).get("mediaName") or None

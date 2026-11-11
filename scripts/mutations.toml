@@ -152,3 +152,15 @@ name = "a slow launch is never asked for again"
 file = "src/mister_mcp/server.py"
 find = 'working=LAUNCH_WORKING,'
 replace = 'working=WORKING,'
+
+[[rule]]
+name = "a running game is never ended without a yes"
+file = "src/mister_mcp/service.py"
+find = 'if active:$'
+replace = 'if False:'
+
+[[rule]]
+name = "a token works once and only while fresh"
+file = "src/mister_mcp/service.py"
+find = 'if asked is None or self\._clock\(\) > asked\[1\]:'
+replace = 'if asked is None:'

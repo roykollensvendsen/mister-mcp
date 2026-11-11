@@ -29,7 +29,11 @@ STANDARD = {
     ],
     5: ["test_launch.py::test_a_start_is_said_as_done_only_once_the_mister_shows_it"],
     6: ["test_status.py::test_a_mister_that_does_not_answer_is_not_called_on_or_off"],
-    7: ["test_tool_names.py::test_no_tool_switches_power"],
+    7: [
+        "test_tool_names.py::test_no_tool_switches_power",
+        "test_ask_first.py::test_a_running_game_is_never_ended_without_a_yes",
+        "test_ask_first.py::test_a_token_works_once_and_only_while_fresh",
+    ],
     8: ["test_launch.py::test_a_hands_off_tv_is_never_sent_an_input"],
     9: ["test_server.py::test_the_tools_that_only_look_are_marked_read_only_and_no_others"],
     10: [

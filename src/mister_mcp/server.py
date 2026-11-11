@@ -23,7 +23,9 @@ if TYPE_CHECKING:
 INSTRUCTIONS = (
     "Says what the owner's MiSTer FPGA is playing and finds its games by name. "
     "Read each 'say' aloud as it is. "
-    "Start a game only when the owner asks for it now. No tool writes, deletes or changes a setting "
+    "Start a game only when the owner asks for it now. When a game is running, mister_launch asks first: "
+    "read its question, and call mister_launch_confirm with its token only if the owner clearly says yes. "
+    "No tool writes, deletes or changes a setting "
     "on the MiSTer, and none switches a TV on."
 )
 SIMULATED = "A SIMULATED MiSTer, not a real one: say so. "
@@ -125,5 +127,16 @@ def build_server(service: MisterService, *, simulated: bool = False) -> MCPServe
     )
     async def mister_launch(game: str | None = None, system: str | None = None) -> dict[str, Any]:
         return await service.launch(game=game, system=system)
+
+    @guarded.tool(
+        working=LAUNCH_WORKING,
+        annotations=CHANGES,
+        description=(
+            "Say yes to a start.\nOnly after the owner clearly said yes to the question mister_launch"
+            " asked. Token: the one that question gave."
+        ),
+    )
+    async def mister_launch_confirm(token: str) -> dict[str, Any]:
+        return await service.confirm(token)
 
     return server
