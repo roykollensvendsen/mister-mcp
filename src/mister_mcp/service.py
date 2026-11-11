@@ -17,6 +17,7 @@ from mister_mcp.zaparoo import (
     UnreachableError,
     Zaparoo,
     ZaparooError,
+    ZaparooNotRunningError,
     game_text,
     system_text,
 )
@@ -26,12 +27,18 @@ UNREACHABLE = (
     "The MiSTer is not answering, so it is off or not on the network. "
     "Switch it on, wait a minute, and ask again."
 )
+#: What the voice hears when the MiSTer is on but Zaparoo on it is not running.
+NOT_RUNNING = (
+    "The MiSTer is on, but Zaparoo isn't running on it. "
+    "Start Zaparoo from the MiSTer's Scripts menu, and ask again."
+)
 #: The most games one answer reads out; the voice cannot list a hundred.
 MAX_RESULTS = 5
 
 
-def _unreachable(**fields: Any) -> dict[str, Any]:  # noqa: ANN401
-    return {"success": False, "outcome": "unreachable", "say": UNREACHABLE, **fields}
+def _unreachable(error: UnreachableError, **fields: Any) -> dict[str, Any]:  # noqa: ANN401
+    say = NOT_RUNNING if isinstance(error, ZaparooNotRunningError) else UNREACHABLE
+    return {"success": False, "outcome": "unreachable", "say": say, **fields}
 
 
 def _game(result: dict[str, Any]) -> dict[str, str]:
@@ -83,9 +90,12 @@ class MisterService:
         """Whether the MiSTer answers, and what it is running."""
         try:
             active = await self.zaparoo.active()
-        except UnreachableError:
+        except ZaparooNotRunningError as error:
+            # RULE: a mister that answers without zaparoo is called on
+            return _unreachable(error, on=True, system=None, game=None)
+        except UnreachableError as error:
             # RULE: a mister that does not answer is not called on or off
-            return _unreachable(on=None, system=None, game=None)
+            return _unreachable(error, on=None, system=None, game=None)
         return {
             "success": True,
             "outcome": "done",
@@ -99,8 +109,8 @@ class MisterService:
         """The games whose names hold every word of `name`, at most MAX_RESULTS of them."""
         try:
             results = await self.zaparoo.search(name, max_results=MAX_RESULTS + 1)
-        except UnreachableError:
-            return _unreachable(games=[])
+        except UnreachableError as error:
+            return _unreachable(error, games=[])
         games = [_game(r) for r in results]
         if not games:
             return {
@@ -120,8 +130,8 @@ class MisterService:
         """Start a game by its name, or a system's core alone; then show the MiSTer on the TV."""
         try:
             started = await self._start(game, system)
-        except UnreachableError:
-            return _unreachable(game=None, system=None)
+        except UnreachableError as error:
+            return _unreachable(error, game=None, system=None)
         if not started["success"] or self.tv is None:
             return started
         # RULE: the tv is touched only once the game started
