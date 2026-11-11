@@ -96,7 +96,7 @@ replace = 'if False:'
 [[rule]]
 name = "a tv that is not on is never sent an input"
 file = "src/mister_mcp/tv.py"
-find = 'if _screen\(report\) != "on":'
+find = 'if screen_of\(report, self\.tv\) != "on":'
 replace = 'if False:'
 
 [[rule]]

@@ -22,10 +22,14 @@ from typing import Any, ClassVar, Self
 TV_WITHIN = 6.0
 
 
-def _screen(report: dict[str, Any]) -> str | None:
-    """The TV's own screen, as tv-mcp reports it: ``screen``, or ``state`` when there is none."""
-    value = report.get("screen", report.get("state"))
-    return value if isinstance(value, str) else None
+def screen_of(report: dict[str, Any], tv: str) -> str | None:
+    """`tv`'s own screen in a tv_status answer: its entry under ``tvs``, ``screen`` or else ``state``."""
+    entries = report.get("tvs")
+    for entry in entries if isinstance(entries, list) else []:
+        if isinstance(entry, dict) and entry.get("tv") == tv:
+            value = entry.get("screen") or entry.get("state")
+            return value if isinstance(value, str) else None
+    return None
 
 
 class TvSwitch:
@@ -60,7 +64,7 @@ class TvSwitch:
             )
         report = await self.call("tv_status", {"tv": self.tv}) or {}
         # RULE: a tv that is not on is never sent an input
-        if _screen(report) != "on":
+        if screen_of(report, self.tv) != "on":
             return _alone(
                 f"{self.tv.capitalize()} is not on, so I left it alone. "
                 f"Switch it on yourself and choose {self.device}."
@@ -110,7 +114,8 @@ class SimulatedTvPlugin(TvSwitch):
     async def _send(self, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
         self.calls.append((tool, arguments))
         if tool == "tv_status":
-            return {"success": True, "outcome": "done", "screen": self.screen, "say": "..."}
+            entry = {"tv": self.tv, "state": "reachable", "screen": self.screen}
+            return {"success": True, "say": "...", "tvs": [entry]}
         if self.screen != "on":
             say = f"{self.tv.capitalize()} is not on, so its input was left alone."
             return {"success": False, "outcome": "refused", "say": say}
