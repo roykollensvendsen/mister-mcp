@@ -156,9 +156,12 @@ class WebSocketTransport:
                         answer = json.loads(await socket.recv())
                         if isinstance(answer, dict) and answer.get("id") == request["id"]:
                             return answer
-        except ConnectionRefusedError as error:
-            msg = "the MiSTer is on, but Zaparoo is not running on it"
-            raise ZaparooNotRunningError(msg) from error
         except (TimeoutError, OSError, websockets.WebSocketException) as error:
-            msg = "Zaparoo on the MiSTer did not answer"
-            raise UnreachableError(msg) from error
+            raise _unanswered(error) from error
+
+
+def _unanswered(error: Exception) -> UnreachableError:
+    """What a failed connection means: a MiSTer that refused it is on, without Zaparoo."""
+    if isinstance(error, ConnectionRefusedError):
+        return ZaparooNotRunningError("the MiSTer is on, but Zaparoo is not running on it")
+    return UnreachableError("Zaparoo on the MiSTer did not answer")

@@ -63,12 +63,7 @@ class SimulatedMister:
 
     async def send(self, request: dict[str, Any], *, wait: float) -> dict[str, Any]:  # noqa: ARG002 - answers at once
         """Zaparoo's answer to `request`."""
-        if not self.on:
-            msg = "the simulated MiSTer is off"
-            raise UnreachableError(msg)
-        if not self.zaparoo:
-            msg = "the simulated MiSTer is on, but Zaparoo is not running on it"
-            raise ZaparooNotRunningError(msg)
+        self._answers()
         self.sent.append(request)
         method, params = request["method"], request.get("params") or {}
         answer = {"jsonrpc": "2.0", "id": request["id"]}
@@ -90,6 +85,15 @@ class SimulatedMister:
         if method == "run":
             return answer | self._run(str(params.get("text", "")))
         return answer | {"error": {"code": -32601, "message": "method not found"}}
+
+    def _answers(self) -> None:
+        """Raise as the WebSocket would when this MiSTer is off, or on without Zaparoo."""
+        if not self.on:
+            msg = "the simulated MiSTer is off"
+            raise UnreachableError(msg)
+        if not self.zaparoo:
+            msg = "the simulated MiSTer is on, but Zaparoo is not running on it"
+            raise ZaparooNotRunningError(msg)
 
     @staticmethod
     def _search(params: dict[str, Any]) -> list[dict[str, Any]]:
