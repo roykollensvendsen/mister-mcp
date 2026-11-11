@@ -13,9 +13,12 @@ import asyncio
 import itertools
 import json
 import re
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 import websockets
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
 
 #: The only Zaparoo calls this plugin ever sends (ADR-MM-001).
 ALLOWED_METHODS = frozenset({"version", "media.active", "media.search", "systems", "run"})
@@ -28,6 +31,8 @@ CONNECT_WAIT = 2.0
 READ_WAIT = 3.0
 #: Seconds for a start; Zaparoo answers ``run`` once the launch has gone through.
 RUN_WAIT = 6.0
+#: Seconds to find the MiSTer among all its addresses, before a read; within the voice's time.
+FIND_WITHIN = 6.0
 
 _GAME_TEXT = re.compile(r"@[^\s/*|][^*|\n\r]*/[^*|\n\r]+")
 _SYSTEM_ID = re.compile(r"[A-Za-z0-9_]+")
@@ -38,7 +43,12 @@ class NotAllowedError(ValueError):
 
 
 class UnreachableError(OSError):
-    """The MiSTer, or Zaparoo on it, did not answer."""
+    """The MiSTer, or Zaparoo on it, did not answer at any of the addresses `tried`."""
+
+    def __init__(self, message: str, *, tried: Sequence[str] = ()) -> None:
+        """Keep the message, and every address that was tried, in order."""
+        super().__init__(message)
+        self.tried = tuple(tried)
 
 
 class ZaparooNotRunningError(UnreachableError):
@@ -139,17 +149,25 @@ class Zaparoo:
 class WebSocketTransport:
     """Zaparoo Core's WebSocket on the MiSTer, one short connection per call."""
 
-    def __init__(self, address: str, *, port: int = PORT, api_key: str | None = None) -> None:
+    def __init__(
+        self,
+        address: str,
+        *,
+        port: int = PORT,
+        api_key: str | None = None,
+        connect_wait: float = CONNECT_WAIT,
+    ) -> None:
         """Reach Zaparoo at `address`; `api_key`, when given, is sent as a bearer token."""
+        self.address, self._connect_wait = address, connect_wait
         self._url = f"ws://{address}:{port}{PATH}"
         self._headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
 
     async def send(self, request: dict[str, Any], *, wait: float) -> dict[str, Any]:
         """Send one request and read until its own answer, skipping notifications."""
         try:
-            async with asyncio.timeout(CONNECT_WAIT + wait):
+            async with asyncio.timeout(self._connect_wait + wait):
                 async with websockets.connect(
-                    self._url, open_timeout=CONNECT_WAIT, additional_headers=self._headers
+                    self._url, open_timeout=self._connect_wait, additional_headers=self._headers
                 ) as socket:
                     await socket.send(json.dumps(request))
                     while True:
@@ -157,11 +175,50 @@ class WebSocketTransport:
                         if isinstance(answer, dict) and answer.get("id") == request["id"]:
                             return answer
         except (TimeoutError, OSError, websockets.WebSocketException) as error:
-            raise _unanswered(error) from error
+            raise _unanswered(error, self.address) from error
 
 
-def _unanswered(error: Exception) -> UnreachableError:
+def _unanswered(error: Exception, address: str) -> UnreachableError:
     """What a failed connection means: a MiSTer that refused it is on, without Zaparoo."""
     if isinstance(error, ConnectionRefusedError):
-        return ZaparooNotRunningError("the MiSTer is on, but Zaparoo is not running on it")
-    return UnreachableError("Zaparoo on the MiSTer did not answer")
+        return ZaparooNotRunningError("the MiSTer is on, but Zaparoo is not running on it", tried=[address])
+    return UnreachableError(f"Zaparoo did not answer at {address}", tried=[address])
+
+
+def connect_wait_for(count: int) -> float:
+    """Seconds to wait for each of `count` addresses, so that all of them fit in FIND_WITHIN."""
+    return min(CONNECT_WAIT, FIND_WITHIN / max(count, 1))
+
+
+class FallbackTransport:
+    """The MiSTer at the first of its addresses that answers: its name, then the spares."""
+
+    def __init__(self, addresses: Sequence[str], *, reach: Callable[[str], Transport]) -> None:
+        """Try `addresses` in order, each reached through `reach`."""
+        self._addresses = list(addresses)
+        self._at = {address: reach(address) for address in self._addresses}
+        #: The address that answered last, asked first from then on.
+        self.used: str | None = None
+
+    def _order(self) -> list[str]:
+        # RULE: addresses are tried in the order the settings give
+        order = list(self._addresses)
+        if self.used in order:
+            order.remove(self.used)
+            order.insert(0, self.used)
+        return order
+
+    async def send(self, request: dict[str, Any], *, wait: float) -> dict[str, Any]:
+        """The answer from the first address that answers; UnreachableError naming all if none does."""
+        for address in self._order():
+            try:
+                answer = await self._at[address].send(request, wait=wait)
+            except ZaparooNotRunningError:
+                self.used = address
+                raise
+            except UnreachableError:
+                continue
+            self.used = address
+            return answer
+        msg = "the MiSTer did not answer at any of its addresses"
+        raise UnreachableError(msg, tried=self._addresses)

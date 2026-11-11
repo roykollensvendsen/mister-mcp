@@ -33,9 +33,15 @@ class Settings:
     """Where the MiSTer is, and how to reach Zaparoo on it."""
 
     address: str | None = None
+    #: Spare addresses, tried in order when `address` does not answer.
+    addresses: tuple[str, ...] = ()
     port: int = PORT
     api_key: str | None = field(default=None, repr=False)
     tv: dict[str, Any] = field(default_factory=dict)
+
+    def where(self) -> list[str]:
+        """Every address to try, in order: the main one, then the spares, each once."""
+        return list(dict.fromkeys([*([self.address] if self.address else []), *self.addresses]))
 
 
 def settings_path() -> pathlib.Path:
@@ -63,6 +69,7 @@ def load_settings(path: pathlib.Path) -> Settings:
     mister = table.get("mister", {})
     return Settings(
         address=mister.get("address"),
+        addresses=tuple(str(a) for a in mister.get("addresses", [])),
         port=int(mister.get("port", PORT)),
         api_key=_key(path.with_name("zaparoo-key")),
         tv=dict(table.get("tv", {})),

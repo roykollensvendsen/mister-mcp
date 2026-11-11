@@ -47,8 +47,14 @@ In `~/.config/mister-mcp/config.toml`, never in this repository:
 <!-- not run: a settings file, not a command -->
 ```toml
 [mister]
-address = "192.0.2.10"   # the MiSTer on the home network
+address = "mister.example"       # the MiSTer's name on the home network
+addresses = ["192.0.2.10"]       # optional spares, tried in order when the name does not answer
 ```
+
+The name is tried first, then each spare. Together they take at most six
+seconds, so the voice still gets its answer in time. After that, the address
+that answered is asked first. `mister_status` says which address it used.
+When none of them answers, the voice names each one and says what to check.
 
 To have the TV the MiSTer is plugged into show it after a start, add the
 TV plugin ([tv-mcp](https://github.com/roykollensvendsen/tv-mcp)) and the

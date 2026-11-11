@@ -90,10 +90,10 @@ class SimulatedMister:
         """Raise as the WebSocket would when this MiSTer is off, or on without Zaparoo."""
         if not self.on:
             msg = "the simulated MiSTer is off"
-            raise UnreachableError(msg)
+            raise UnreachableError(msg, tried=[ADDRESS])
         if not self.zaparoo:
             msg = "the simulated MiSTer is on, but Zaparoo is not running on it"
-            raise ZaparooNotRunningError(msg)
+            raise ZaparooNotRunningError(msg, tried=[ADDRESS])
 
     @staticmethod
     def _search(params: dict[str, Any]) -> list[dict[str, Any]]:

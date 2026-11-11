@@ -36,8 +36,8 @@ def test_a_mister_that_does_not_answer_is_not_called_on_or_off():
     assert answer["success"] is False
     assert answer["outcome"] == "unreachable"
     assert answer["on"] is None
-    assert "off" in answer["say"]
-    assert "network" in answer["say"]
+    assert "Sjekk at den er på" in answer["say"]
+    assert "nettet" in answer["say"]
 
 
 def test_a_mister_that_answers_without_zaparoo_is_called_on():
