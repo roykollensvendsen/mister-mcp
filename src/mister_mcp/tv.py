@@ -22,14 +22,17 @@ from typing import Any, ClassVar, Self
 TV_WITHIN = 6.0
 
 
+def _entries(report: dict[str, Any]) -> list[dict[str, Any]]:
+    """The per-TV entries of a tv_status answer, under ``tvs``."""
+    entries = report.get("tvs")
+    return [e for e in entries if isinstance(e, dict)] if isinstance(entries, list) else []
+
+
 def screen_of(report: dict[str, Any], tv: str) -> str | None:
     """`tv`'s own screen in a tv_status answer: its entry under ``tvs``, ``screen`` or else ``state``."""
-    entries = report.get("tvs")
-    for entry in entries if isinstance(entries, list) else []:
-        if isinstance(entry, dict) and entry.get("tv") == tv:
-            value = entry.get("screen") or entry.get("state")
-            return value if isinstance(value, str) else None
-    return None
+    entry = next((e for e in _entries(report) if e.get("tv") == tv), {})
+    value = entry.get("screen") or entry.get("state")
+    return value if isinstance(value, str) else None
 
 
 class TvSwitch:
