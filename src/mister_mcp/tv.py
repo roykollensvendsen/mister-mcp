@@ -54,16 +54,22 @@ class TvSwitch:
     async def show_mister(self) -> dict[str, Any]:
         """Switch the TV to the MiSTer if its screen is on; otherwise leave it alone."""
         if "tv_input" not in await self._offered():
-            return _alone("The TV plugin does not offer to change inputs, so I left the TV alone.")
+            return _alone(
+                "The TV plugin does not offer to change inputs, so I left the TV alone. "
+                "Switch it to the MiSTer by hand, or turn on input in the TV plugin's settings."
+            )
         report = await self.call("tv_status", {"tv": self.tv}) or {}
         # RULE: a tv that is not on is never sent an input
         if _screen(report) != "on":
-            return _alone(f"{self.tv.capitalize()} is not on, so I left it alone.")
+            return _alone(
+                f"{self.tv.capitalize()} is not on, so I left it alone. "
+                f"Switch it on yourself and choose {self.device}."
+            )
         answer = await self.call("tv_input", {"source": self.device, "tv": self.tv}) or {}
         return {
             "success": bool(answer.get("success")),
             "outcome": str(answer.get("outcome", "refused")),
-            "say": str(answer.get("say", "The TV did not say what it shows.")),
+            "say": str(answer.get("say", "The TV did not say what it shows. Ask it what it shows.")),
         }
 
     async def __aenter__(self) -> Self:
@@ -182,5 +188,8 @@ async def show_mister(tv: TvSwitch) -> dict[str, Any]:
         return {
             "success": False,
             "outcome": "refused",
-            "say": "I could not reach the TV plugin, so I could not switch the TV.",
+            "say": (
+                "I could not reach the TV plugin, so I could not switch the TV. "
+                "Switch it to the MiSTer by hand, and run tv-mcp status to see what is wrong."
+            ),
         }

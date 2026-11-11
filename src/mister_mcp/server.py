@@ -32,7 +32,10 @@ ANSWER_WITHIN = 12.0
 #: What the voice hears when a tool is still working by then; the work carries on.
 WORKING = "That is taking a while, and it carries on. Ask again in a moment to hear how it went."
 #: What the voice hears when mister-mcp itself fails, so it never hears only that the tool failed.
-BROKE = "That went wrong inside mister-mcp. Try again, and if it fails again, check its log."
+BROKE = (
+    "That went wrong inside mister-mcp. Try again. "
+    "If it fails again, run mister-mcp status in a terminal to see what is wrong."
+)
 
 READ_ONLY = ToolAnnotations(read_only_hint=True)
 CHANGES = ToolAnnotations(read_only_hint=False)

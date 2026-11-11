@@ -55,7 +55,11 @@ def _key(path: pathlib.Path) -> str | None:
 
 def load_settings(path: pathlib.Path) -> Settings:
     """The settings in `path`; an absent file means nothing is set."""
-    table = tomllib.loads(path.read_text()) if path.is_file() else {}
+    try:
+        table = tomllib.loads(path.read_text()) if path.is_file() else {}
+    except tomllib.TOMLDecodeError as error:
+        msg = f"{path} is not valid TOML ({error}); fix that line, or use --simulate meanwhile."
+        raise SettingsError(msg) from error
     mister = table.get("mister", {})
     return Settings(
         address=mister.get("address"),

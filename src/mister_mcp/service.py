@@ -69,6 +69,17 @@ def _system_said(said: str, systems: list[dict[str, Any]]) -> list[dict[str, Any
     return [s for s in systems if wanted and wanted in _plain(str(s.get("name", "")))]
 
 
+def _which_system(said: str, fits: list[dict[str, Any]], systems: list[dict[str, Any]]) -> str:
+    """The question back when `said` names no system, or more than one."""
+    if fits:
+        return f"The MiSTer has {' and '.join(str(s.get('name')) for s in fits)}. Say which system."
+    names = [str(s.get("id")) for s in systems]
+    shown = ", ".join(names[:MAX_RESULTS]) + (
+        f", and {len(names) - MAX_RESULTS} more" if len(names) > MAX_RESULTS else ""
+    )
+    return f"The MiSTer has no system called {said}. It has {shown}. Say one of those."
+
+
 def describe(active: dict[str, Any] | None) -> str:
     """What the MiSTer is running, as a phrase: "playing X on Y", or "at its menu"."""
     if not active:
@@ -144,8 +155,7 @@ class MisterService:
         if system:
             fits = _system_said(system, systems)
             if len(fits) != 1:
-                named = " or ".join(str(s.get("name")) for s in fits) or "no system by that name"
-                return _refused(f"The MiSTer has {named}. Say which system.", game=None, system=None)
+                return _refused(_which_system(system, fits, systems), game=None, system=None)
             chosen = fits[0]
         if game:
             return await self._start_game(game, chosen)
@@ -170,9 +180,11 @@ class MisterService:
         try:
             text = game_text(str(picked[0].get("zapScript", "")))
         except NotAllowedError:
-            return _refused(
-                f"I may not start {found['name']} the way the MiSTer lists it.", game=None, system=None
+            say = (
+                f"I may not start {found['name']} the way the MiSTer lists it. "
+                "Start it from the MiSTer's own menu."
             )
+            return _refused(say, game=None, system=None)
         return await self._run(text, game=found["name"], system=found["system"])
 
     async def _run(self, text: str, *, game: str | None, system: str | None) -> dict[str, Any]:
@@ -187,5 +199,8 @@ class MisterService:
         if active and shows == game and (game or active.get("systemName") == system):
             say = f"Started. The MiSTer is {describe(active)}."
             return {"success": True, "outcome": "done", "say": say, "game": game, "system": system}
-        say = f"I sent the start, but the MiSTer is {describe(active)}."
+        say = (
+            f"I sent the start, but the MiSTer is {describe(active)}. "
+            "Ask what it is playing in a moment, or start it from the MiSTer's own menu."
+        )
         return {"success": False, "outcome": "unverified", "say": say, "game": shows, "system": system}

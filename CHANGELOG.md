@@ -13,6 +13,13 @@ versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
   off the network, never one of the two.
 - A MiSTer that is on but refuses the connection, because Zaparoo is not
   running on it, is said to be on, with the step that starts Zaparoo.
+- SSH options for the later power work: key only, in batch mode, never a
+  password. A missing key is said in Norwegian, in the owner's words, with the
+  `ssh-copy-id` that puts it back. No SSH command runs yet.
+- Every failure says what is wrong and what to do next: an unknown system
+  is answered with the systems the MiSTer has, a start the MiSTer does not
+  show, a TV left alone, an unreachable TV plugin and a settings file that
+  is not valid TOML each name the step to take.
 - `mister_search`: up to five games whose names hold every word said, among
   those Zaparoo has indexed, each with its system.
 - `mister_launch`: starts a game by name, or a system's core alone, then
