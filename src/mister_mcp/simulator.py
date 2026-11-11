@@ -8,8 +8,14 @@ sent, so a test can say what reached the MiSTer.
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import secrets
 from typing import TYPE_CHECKING, Any
 
+from ecdsa.ellipticcurve import Point
+
+from mister_mcp.pairing import CURVE, U, V, confirm_keys, decode, encode, pairing_hmac
 from mister_mcp.ssh import ALLOWED_COMMANDS, SSH_FAILED, NotAllowedCommandError, Reply
 from mister_mcp.zaparoo import UnreachableError, ZaparooNotRunningError
 
@@ -219,3 +225,44 @@ class SimulatedShell:
     def _start(self) -> Reply:
         self.running, self.live_log = True, ["Update All 2.3"]
         return self._reply("")
+
+
+class SimulatedPairing:
+    """A pretend secured Zaparoo that pairs with SIMULATED_PIN, answering as Core's endpoints do."""
+
+    #: The PIN the pretend Zaparoo shows.
+    PIN = "000000"
+
+    def __init__(self) -> None:
+        """A pretend Zaparoo with a pairing window open."""
+        self._pin = self.PIN.encode()
+        self._alpha = 1 + secrets.randbelow(CURVE.order - 1)
+        self._a = self._b = self._key = b""
+        self._name = ""
+
+    async def __call__(self, path: str, body: dict[str, str]) -> tuple[int, dict[str, Any]]:
+        """Zaparoo's answer to a POST of `body` to `path`."""
+        if path == "/api/pair/start":
+            return self._start(body)
+        return self._finish(body)
+
+    def _start(self, body: dict[str, str]) -> tuple[int, dict[str, Any]]:
+        self._a, self._name = base64.b64decode(body["pake"]), body["name"]
+        x = decode(self._a, role=0)["x"]
+        pw = int.from_bytes(self._pin, "big")
+        y = pw * V + self._alpha * CURVE.generator
+        z = self._alpha * (Point(CURVE.curve, *x) + (-(pw * U)))
+        digest = hashlib.sha256(self._pin)
+        for n in (*x, y.x(), y.y(), z.x(), z.y()):
+            digest.update(n.to_bytes((n.bit_length() + 7) // 8, "big"))
+        self._key = digest.digest()
+        self._b = encode(1, {"u": (U.x(), U.y()), "v": (V.x(), V.y()), "x": x, "y": (y.x(), y.y())})
+        return 200, {"session": "simulated", "pake": base64.b64encode(self._b).decode()}
+
+    def _finish(self, body: dict[str, str]) -> tuple[int, dict[str, Any]]:
+        a_key, b_key, _ = confirm_keys(self._key, self._a, self._b)
+        if base64.b64decode(body["confirm"]) != pairing_hmac(a_key, "client", self._name, self._a, self._b):
+            return 401, {}
+        server = pairing_hmac(b_key, "server", self._name, self._a, self._b)
+        confirm = base64.b64encode(server).decode()
+        return 200, {"authToken": "simulated", "clientId": "simulated", "confirm": confirm}
