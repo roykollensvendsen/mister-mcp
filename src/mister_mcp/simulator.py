@@ -47,6 +47,10 @@ class SimulatedMister:
         self.on = on
         self.active: dict[str, Any] | None = None
         self.sent: list[dict[str, Any]] = []
+        #: A further search result, as a test wants Zaparoo to have returned it.
+        self.extra_result: dict[str, Any] | None = None
+        #: When set, a start is acknowledged but the MiSTer keeps showing what it showed.
+        self.ignores_runs = False
 
     def play(self, system: str, name: str | None) -> None:
         """Make the MiSTer run `name` on `system`'s core, or the core alone."""
@@ -73,7 +77,13 @@ class SimulatedMister:
             systems = [{"id": key, "name": name} for key, name in SYSTEMS.items()]
             return answer | {"result": {"systems": systems}}
         if method == "media.search":
-            return answer | {"result": {"results": self._search(params)}}
+            found = self._search(params)
+            if self.extra_result and all(
+                w in self.extra_result["name"].casefold()
+                for w in str(params.get("query", "")).casefold().split()
+            ):
+                found.append(self.extra_result)
+            return answer | {"result": {"results": found}}
         if method == "run":
             return answer | self._run(str(params.get("text", "")))
         return answer | {"error": {"code": -32601, "message": "method not found"}}
@@ -90,6 +100,8 @@ class SimulatedMister:
         return found[: int(params.get("maxResults", 100))]
 
     def _run(self, text: str) -> dict[str, Any]:
+        if self.ignores_runs:
+            return {"result": None}
         if text.startswith("**launch.system:"):
             system = text.removeprefix("**launch.system:")
             if system in SYSTEMS:

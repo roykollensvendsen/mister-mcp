@@ -16,3 +16,4 @@ read whenever a decision record is written and when a phase ends.
 | Pairing with Zaparoo as a member client, or with an API key | The first use against the real MiSTer | It is a change on the MiSTer, the owner's to make; until then the plugin's own allow-list is the guard |
 | Blocking `execute`, `mister.script` and `mister.ini` in Zaparoo's `block_commands` on the MiSTer | The first use against the real MiSTer | A settings change on the MiSTer, the owner's to make; `unsafe: true` and the plugin's text check already refuse them |
 | The quality ratchet from tv-mcp (no level worse than main's) | The three tools are merged | Until there is code, there is no level to keep |
+| Asking the bridge to call `tv_input` instead of starting tv-mcp over stdio | The bridge lets one plugin call another plugin's tool | Plugins cannot reach the bridge today; `TvSwitch` keeps the swap to one class |

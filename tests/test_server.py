@@ -4,6 +4,7 @@
 import asyncio
 import re
 
+from mister_mcp import tv, zaparoo
 from mister_mcp.server import ANSWER_WITHIN, build_server
 from mister_mcp.service import MisterService
 from mister_mcp.simulator import SimulatedMister
@@ -91,6 +92,24 @@ def test_a_tool_still_working_at_the_deadline_says_it_carries_on(monkeypatch):
 def test_a_tools_longest_wait_fits_in_the_voices_time():
     voice_limit, margin = 15.0, 2.0
     assert ANSWER_WITHIN + margin <= voice_limit
+
+
+def test_a_launchs_longest_path_finishes_within_half_a_minute():
+    each = zaparoo.CONNECT_WAIT
+    longest = (
+        (each + zaparoo.READ_WAIT)  # systems
+        + (each + zaparoo.READ_WAIT)  # search
+        + (each + zaparoo.RUN_WAIT)  # run
+        + (each + zaparoo.READ_WAIT)  # read back
+        + tv.TV_WITHIN
+    )
+    assert longest <= 30.0
+
+
+def test_mister_launch_starts_the_game_and_says_so():
+    answer = _call(_server(), "mister_launch", {"game": "xeno crisis"})
+    assert answer["outcome"] == "done"
+    assert answer["say"].startswith("Simulated: Started.")
 
 
 def test_mister_search_names_the_games_it_found():
