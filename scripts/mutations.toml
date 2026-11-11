@@ -190,6 +190,30 @@ find = 'say = REFUSALS\.get\(error\.category or "", REFUSED\)'
 replace = 'say = f"{error}. " + REFUSALS.get(error.category or "", REFUSED)'
 
 [[rule]]
+name = "a pin that is not six digits is never sent"
+file = "src/mister_mcp/pairing.py"
+find = '    if not _PIN\.fullmatch\(pin\):'
+replace = '    if False:'
+
+[[rule]]
+name = "a server that cannot prove the pin is never trusted"
+file = "src/mister_mcp/pairing.py"
+find = '    if not hmac\.compare_digest\(expected, base64\.b64decode\(finished\.get\("confirm", ""\)\)\):'
+replace = '    if False:'
+
+[[rule]]
+name = "the pairing key is kept where only the owner can read it"
+file = "src/mister_mcp/pairing.py"
+find = '    os\.fchmod\(descriptor, 0o600\)'
+replace = '    os.fchmod(descriptor, 0o644)'
+
+[[rule]]
+name = "the pin is typed by the owner and never shown"
+file = "src/mister_mcp/cli.py"
+find = '        pin = getpass\.getpass\(ASK_PIN\)\.strip\(\)'
+replace = '        pin = input(ASK_PIN).strip()'
+
+[[rule]]
 name = "only a command from the fixed list is ever sent over ssh"
 file = "src/mister_mcp/ssh.py"
 find = '        if name not in ALLOWED_COMMANDS:'

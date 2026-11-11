@@ -53,7 +53,7 @@ LOWER = ("lint_errors", "type_errors", "cycles", "layer_violations", "duplicatio
 # Each module's layer: a module may use, when it loads, only modules in the layers below it.
 LAYERS = {
     **dict.fromkeys(
-        ("_version", "zaparoo", "tv", "ssh"), 0
+        ("_version", "zaparoo", "tv", "ssh", "pairing"), 0
     ),  # talking to one thing: Zaparoo, the TV plugin, SSH
     **dict.fromkeys(("settings", "simulator", "service"), 1),  # built on those
     "updater": 2,  # update_all, which names a game the way the service does

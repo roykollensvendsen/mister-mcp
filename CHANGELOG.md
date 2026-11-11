@@ -8,6 +8,10 @@ versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `mister-mcp pair` pairs this computer with a secured Zaparoo Core
+  (ADR-MM-005). The owner types the PIN the MiSTer shows, and it is not
+  shown on screen. Both sides prove the PIN, and the pairing is kept in
+  `~/.config/mister-mcp`, readable by the owner alone.
 - update_all by voice (ADR-MM-004): `mister_update_request` checks and asks,
   naming a running game and refusing below 512 MB free, while a run is
   going, or just after the MiSTer started; `mister_update_confirm` starts it
