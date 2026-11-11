@@ -110,3 +110,15 @@ name = "a start is said as done only once the mister shows it"
 file = "src/mister_mcp/service.py"
 find = 'if active and shows == game and \(game or active\.get\("systemName"\) == system\):'
 replace = 'if True:'
+
+[[rule]]
+name = "a measure that gets worse fails the check"
+file = "scripts/ratchet.py"
+find = 'if _worse\(metric, base\[metric\], now\[metric\]\) and metric not in allowed:'
+replace = 'if False:'
+
+[[rule]]
+name = "when the levels main kept are missing, the base is measured"
+file = "scripts/ratchet.py"
+find = '^    return measure_base\(\)$'
+replace = 'return {}'
