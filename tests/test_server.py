@@ -91,3 +91,8 @@ def test_a_tool_still_working_at_the_deadline_says_it_carries_on(monkeypatch):
 def test_a_tools_longest_wait_fits_in_the_voices_time():
     voice_limit, margin = 15.0, 2.0
     assert ANSWER_WITHIN + margin <= voice_limit
+
+
+def test_mister_search_names_the_games_it_found():
+    answer = _call(_server(), "mister_search", {"name": "tanglewood"})
+    assert answer["games"] == [{"name": "Tanglewood", "system": "Sega Genesis"}]
