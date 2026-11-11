@@ -72,6 +72,10 @@ class TvSwitch:
             "say": str(answer.get("say", "The TV did not say what it shows. Ask it what it shows.")),
         }
 
+    def status_command(self) -> str:
+        """The command that shows what is wrong with the TV plugin, as the owner types it."""
+        return "uv run --directory ~/tv-mcp tv-mcp status"
+
     async def __aenter__(self) -> Self:
         """Nothing to open."""
         return self
@@ -120,6 +124,7 @@ class TvPlugin(TvSwitch):
     def __init__(self, *, command: list[str], tv: str, device: str) -> None:
         """Start the TV plugin with `command`, such as ``uv run --directory ~/tv-mcp tv-mcp serve``."""
         super().__init__(tv=tv, device=device)
+        self._typed = list(command)
         self._command = [
             str(pathlib.Path(part).expanduser()) if part.startswith("~") else part for part in command
         ]
@@ -141,6 +146,11 @@ class TvPlugin(TvSwitch):
         self._session = await self._stack.enter_async_context(ClientSession(read, write))
         await self._session.initialize()
         return self
+
+    def status_command(self) -> str:
+        """The settings' own command for the TV plugin, asking for its status instead of serving."""
+        typed = [*self._typed[:-1], "status"] if self._typed[-1:] == ["serve"] else [*self._typed, "status"]
+        return " ".join(typed)
 
     @property
     def is_open(self) -> bool:
@@ -190,6 +200,6 @@ async def show_mister(tv: TvSwitch) -> dict[str, Any]:
             "outcome": "refused",
             "say": (
                 "I could not reach the TV plugin, so I could not switch the TV. "
-                "Switch it to the MiSTer by hand, and run tv-mcp status to see what is wrong."
+                f"Switch it to the MiSTer by hand, and run {tv.status_command()} to see what is wrong."
             ),
         }
