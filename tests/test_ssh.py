@@ -30,9 +30,9 @@ def test_a_missing_key_is_said_in_the_owners_words():
     ):
         assert key_missing(stderr, ADDRESS) == (
             "The MiSTer does not accept this computer's key. "
-            f"Run ssh-copy-id root@{ADDRESS} in a terminal, "
-            "then change the MiSTer's password from the default."
+            f"Run ssh-copy-id root@{ADDRESS} in a terminal."
         )
+        assert "password" not in key_missing(stderr, ADDRESS)
 
 
 def test_never_a_password_login():

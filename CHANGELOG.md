@@ -26,7 +26,7 @@ versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 - SSH to the MiSTer is by key only: password and keyboard login are off,
   and no password is written anywhere, not even the factory default. A
   settings file holding a password is refused. A refused key is said with
-  `ssh-copy-id` and the advice to change the MiSTer's default password.
+  `ssh-copy-id`, the one step that fixes it.
 - A start Zaparoo refuses is said in plain words, by its error category,
   with what to do next; Zaparoo's own message is never read aloud. A start
   that timed out or was cut off is said as not yet known, not as refused.

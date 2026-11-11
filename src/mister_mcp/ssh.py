@@ -19,7 +19,7 @@ from typing import Protocol
 #: is ever tried instead, not even the MiSTer's factory default: none is written anywhere.
 KEY_MISSING = (
     "The MiSTer does not accept this computer's key. "
-    "Run ssh-copy-id root@{address} in a terminal, then change the MiSTer's password from the default."
+    "Run ssh-copy-id root@{address} in a terminal."
 )
 #: What the voice hears when the MiSTer's host key changed, as after a fresh SD card.
 HOST_CHANGED = (
