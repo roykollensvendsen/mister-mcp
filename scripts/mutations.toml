@@ -172,6 +172,12 @@ find = 'if asked is None or self\._clock\(\) > asked\[1\]:'
 replace = 'if asked is None:'
 
 [[rule]]
+name = "the tv plugin is closed after every use, even a slow one"
+file = "src/mister_mcp/tv.py"
+find = 'await tv\.__aexit__\(None, None, None\)'
+replace = 'await asyncio.sleep(0)'
+
+[[rule]]
 name = "never a password login"
 file = "src/mister_mcp/ssh.py"
 find = '"PasswordAuthentication=no",'

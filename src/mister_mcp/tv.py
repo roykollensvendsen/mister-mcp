@@ -13,6 +13,7 @@ stdio child can later give way to the bridge calling ``tv_input`` itself.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import pathlib
 import shutil
@@ -20,6 +21,8 @@ from typing import Any, ClassVar, Self
 
 #: Seconds the TV step may take inside a launch, starting the TV plugin included.
 TV_WITHIN = 6.0
+#: Seconds to close the TV plugin afterwards, outside TV_WITHIN, so a slow one is never left running.
+CLOSE_WITHIN = 2.0
 
 
 def _entries(report: dict[str, Any]) -> list[dict[str, Any]]:
@@ -167,9 +170,9 @@ class TvPlugin(TvSwitch):
 
     async def __aexit__(self, *_: object) -> None:
         """Close the session and stop the TV plugin, after every use."""
-        if self._stack is not None:
-            await self._stack.aclose()
-        self._stack = self._session = None
+        stack, self._stack, self._session = self._stack, None, None
+        if stack is not None:
+            await stack.aclose()
 
     async def _offered(self) -> set[str]:
         listed = await self._session.list_tools()
@@ -194,8 +197,8 @@ async def show_mister(tv: TvSwitch) -> dict[str, Any]:
     """The TV step of a launch, inside its own deadline, the TV plugin closed afterwards."""
     try:
         async with asyncio.timeout(TV_WITHIN):
-            async with tv:
-                return await tv.show_mister()
+            await tv.__aenter__()
+            return await tv.show_mister()
     except TimeoutError:
         return {
             "success": False,
@@ -211,3 +214,13 @@ async def show_mister(tv: TvSwitch) -> dict[str, Any]:
                 f"Switch it to the MiSTer by hand, and run {tv.status_command()} to see what is wrong."
             ),
         }
+    finally:
+        await _close(tv)
+
+
+async def _close(tv: TvSwitch) -> None:
+    """Close the TV plugin in its own short deadline, even when its start or its answer ran out of time."""
+    # RULE: the tv plugin is closed after every use, even a slow one
+    with contextlib.suppress(Exception):
+        async with asyncio.timeout(CLOSE_WITHIN):
+            await tv.__aexit__(None, None, None)

@@ -56,3 +56,5 @@ versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 - The TV's screen is read from its own entry under `tvs` in tv-mcp's
   answer. Reading only the top level took every TV for off, so the MiSTer
   was never shown on it. The pretend TV plugins now answer in that shape.
+- A TV plugin that is slow to start or answer is still closed afterwards,
+  in its own two-second deadline, so its process is never left running.
