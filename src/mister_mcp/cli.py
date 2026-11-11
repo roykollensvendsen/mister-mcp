@@ -29,7 +29,7 @@ def _service(*, simulate: bool, settings_file: str | None) -> MisterService:
     path = pathlib.Path(settings_file).expanduser() if settings_file else settings_path()
     settings = load_settings(path)
     if not settings.address:
-        msg = f"No MiSTer address in {path}; set [mister] address, or use --simulate."
+        msg = f"No MiSTer address in {path}; set [mister] address there, or use --simulate."
         raise SettingsError(msg)
     transport: Transport = WebSocketTransport(settings.address, port=settings.port, api_key=settings.api_key)
     return MisterService(transport, tv=tv_from(settings.tv))
@@ -41,7 +41,10 @@ def tv_from(table: dict[str, object]) -> TvSwitch | None:
         return None
     command, tv = table.get("command"), table.get("name")
     if not (isinstance(command, list) and command and isinstance(tv, str)):
-        msg = "[tv] needs command = [...] and name = the TV as the TV plugin knows it."
+        msg = (
+            "The [tv] settings are incomplete. "
+            "Set command = [...] and name = the TV as the TV plugin knows it."
+        )
         raise SettingsError(msg)
     return TvPlugin(command=[str(c) for c in command], tv=tv, device=str(table.get("device", "MiSTer")))
 

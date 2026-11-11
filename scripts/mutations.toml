@@ -128,3 +128,15 @@ name = "a mister that answers without zaparoo is called on"
 file = "src/mister_mcp/service.py"
 find = 'return _unreachable\(error, on=True, system=None, game=None\)'
 replace = 'return _unreachable(error, on=None, system=None, game=None)'
+
+[[rule]]
+name = "every ssh call runs in batch mode"
+file = "src/mister_mcp/ssh.py"
+find = '"BatchMode=yes",'
+replace = '"BatchMode=no",'
+
+[[rule]]
+name = "a missing key is said in the owners words"
+file = "src/mister_mcp/ssh.py"
+find = 'if any\(sign in said for sign in _ASKS_FOR_A_PASSWORD\):'
+replace = 'if False:'
