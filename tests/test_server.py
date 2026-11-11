@@ -11,7 +11,9 @@ from mister_mcp.simulator import SimulatedMister
 
 #: The tools that change nothing on the MiSTer or a TV (the plugin standard's rule 9).
 READ_ONLY = {"mister_status", "mister_search"}
-#: The characters of a description the voice saw before loading a tool, 2026-11-10 (tv-mcp).
+#: The characters of a description the voice saw before loading a tool, 2026-11-10. The source
+#: is the plugin standard, claude-voice's docs/plugin-standard.md (rule 2, "about 26 characters").
+#: A plugin cannot import from the bridge, so the figure is kept here, named after its source.
 OPENING_LIMIT = 26
 
 
