@@ -41,6 +41,10 @@ class UnreachableError(OSError):
     """The MiSTer, or Zaparoo on it, did not answer."""
 
 
+class ZaparooNotRunningError(UnreachableError):
+    """The MiSTer refused the connection: it is on, but Zaparoo is not running on it."""
+
+
 class ZaparooError(RuntimeError):
     """Zaparoo answered with an error, such as ``media_not_found``."""
 
@@ -152,6 +156,9 @@ class WebSocketTransport:
                         answer = json.loads(await socket.recv())
                         if isinstance(answer, dict) and answer.get("id") == request["id"]:
                             return answer
+        except ConnectionRefusedError as error:
+            msg = "the MiSTer is on, but Zaparoo is not running on it"
+            raise ZaparooNotRunningError(msg) from error
         except (TimeoutError, OSError, websockets.WebSocketException) as error:
             msg = "Zaparoo on the MiSTer did not answer"
             raise UnreachableError(msg) from error

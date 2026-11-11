@@ -60,7 +60,7 @@ replace = 'await self.call("run", {"text": text}, wait=RUN_WAIT)'
 [[rule]]
 name = "a mister that does not answer is not called on or off"
 file = "src/mister_mcp/service.py"
-find = 'return _unreachable\(on=None, system=None, game=None\)'
+find = 'return _unreachable\(error, on=None, system=None, game=None\)'
 replace = 'return {"success": True, "outcome": "done", "say": "The MiSTer is off.", "on": False, "system": None, "game": None}'
 
 [[rule]]
@@ -122,3 +122,9 @@ name = "when the levels main kept are missing, the base is measured"
 file = "scripts/ratchet.py"
 find = '^    return measure_base\(\)$'
 replace = 'return {}'
+
+[[rule]]
+name = "a mister that answers without zaparoo is called on"
+file = "src/mister_mcp/service.py"
+find = 'return _unreachable\(error, on=True, system=None, game=None\)'
+replace = 'return _unreachable(error, on=None, system=None, game=None)'
