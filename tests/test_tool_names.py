@@ -16,6 +16,7 @@ from mister_mcp.simulator import SimulatedMister
 #: status and search both open with "s" when said aloud.
 CONFUSABLE = {
     frozenset({"mister_search", "mister_launch"}),
+    frozenset({"mister_launch", "mister_launch_confirm"}),
     frozenset({"mister_status", "mister_search"}),
 }
 #: How alike two names may be, as difflib reckons it, before the pair must be listed.
@@ -43,6 +44,7 @@ def test_the_names_that_sound_alike_open_with_different_words():
 
 
 def test_no_tool_switches_power():
-    # The only risky action the owner named, power through a smart plug, is not
-    # built; it will be a request and a confirm (decisions/deferred.md).
-    assert not [t.name for t in _tools() if "power" in t.name or "confirm" in t.name]
+    # Power through a smart plug is not built; it will be a request and a confirm
+    # (decisions/deferred.md). The one confirm today is ending a running game.
+    assert not [t.name for t in _tools() if "power" in t.name]
+    assert [t.name for t in _tools() if "confirm" in t.name] == ["mister_launch_confirm"]

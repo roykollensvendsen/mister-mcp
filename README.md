@@ -29,16 +29,21 @@ $ uv run mister-mcp serve --simulate < /dev/null
 |---|---|---|
 | `mister_status` | Whether the MiSTer is on, and the system and game it runs | No |
 | `mister_search` | Up to five games whose names hold every word said, with their systems | No |
-| `mister_launch` | Starts a game by name, or a system's core alone, reads back what runs, then shows it on the TV if that TV is already on | Starts a game |
+| `mister_launch` | Starts a game by name, or a system's core alone, reads back what runs, then shows it on the TV if that TV is already on. While a game runs, it asks first | Starts a game |
+| `mister_launch_confirm` | The owner's yes to that question, with its one-time token: ends the running game and starts the one asked for | Starts a game |
 
 Every answer has `say`, read aloud as it is, and `success` with `outcome`
 for a program: `done`, `unreachable` (the MiSTer did not answer: off, or not
 on the network), `not_found`, `refused`, or `working` (still going after the
-voice's time, and carrying on).
+voice's time, and carrying on), or `ask` (a question to read aloud, with a
+`token` for the yes).
 
 Which actions are risky is the owner's call (the plugin standard's rule 7).
-Starting a game is not; the one that will be, switching the MiSTer's power
-through a smart plug, is not built yet and will ask first.
+Starting a game from the menu is not. Ending a running game is: a launch
+while a game or core runs is a question that names what runs, and only
+`mister_launch_confirm` with its token, within a minute, starts the new one.
+Switching the MiSTer's power through a smart plug will be risky too; it is not
+built yet.
 
 ## Settings
 

@@ -8,6 +8,9 @@ versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A launch while a game runs asks first, naming the game it would end.
+  `mister_launch_confirm` with the question's one-time token, within a
+  minute, starts the new one. From the menu, a launch starts at once.
 - A launch still going at the voice's deadline says to ask what the MiSTer
   is playing, never to ask again, so a slow start is not sent twice.
 - The MiSTer is found by its name first, then by spare `addresses` from the
