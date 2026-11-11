@@ -41,3 +41,9 @@ versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
   MiSTer is plugged into is then switched to it, only if it is already on.
 - `mister-mcp serve` and `mister-mcp status`, each with `--simulate` for a
   pretend MiSTer whose every answer says "Simulated:".
+
+### Fixed
+
+- The TV's screen is read from its own entry under `tvs` in tv-mcp's
+  answer. Reading only the top level took every TV for off, so the MiSTer
+  was never shown on it. The pretend TV plugins now answer in that shape.
