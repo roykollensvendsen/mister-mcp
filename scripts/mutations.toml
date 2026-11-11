@@ -132,8 +132,8 @@ replace = 'return _unreachable(error, on=None, system=None, game=None)'
 [[rule]]
 name = "every ssh call runs in batch mode"
 file = "src/mister_mcp/ssh.py"
-find = '"BatchMode=yes",'
-replace = '"BatchMode=no",'
+find = 'batch = \["-o", "BatchMode=yes"\]'
+replace = 'batch = ["-o", "BatchMode=no"]'
 
 [[rule]]
 name = "a missing key is said in the owners words"
@@ -164,6 +164,12 @@ name = "a token works once and only while fresh"
 file = "src/mister_mcp/service.py"
 find = 'if asked is None or self\._clock\(\) > asked\[1\]:'
 replace = 'if asked is None:'
+
+[[rule]]
+name = "never a password login"
+file = "src/mister_mcp/ssh.py"
+find = '"PasswordAuthentication=no",'
+replace = '"PasswordAuthentication=yes",'
 
 [[rule]]
 name = "zaparoos own words are never read aloud"
