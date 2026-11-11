@@ -61,7 +61,9 @@ mistake there fails only as "wrong PIN" (HTTP 401).
 
 ## Consequences
 
-- The encrypted connection itself, which uses this pairing, is a separate
-  change.
+- With a pairing kept, every connection is encrypted as Core describes:
+  a fresh 16-byte salt, HKDF-derived keys in each direction, counter nonces
+  and the auth token as AAD. Zaparoo's plaintext refusal (-32001, -32002)
+  is said as "pair this computer", with the command.
 - Losing the file means pairing again. Removing the client in Zaparoo's
   settings undoes the pairing from the MiSTer's side.

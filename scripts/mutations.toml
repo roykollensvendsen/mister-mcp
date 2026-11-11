@@ -214,6 +214,17 @@ find = '        pin = getpass\.getpass\(ASK_PIN\)\.strip\(\)'
 replace = '        pin = input(ASK_PIN).strip()'
 
 [[rule]]
+name = "a frame that does not decrypt is never believed"
+file = "src/mister_mcp/pairing.py"
+find = '            return self\._in\.open\(base64\.b64decode\(frame\["e"\]\)\)\.decode\(\)'
+replace = '            return base64.b64decode(frame["e"]).decode(errors="replace")'
+
+[[rule]]
+name = "a refused login is said as needing pairing"
+file = "src/mister_mcp/zaparoo.py"
+find = '        if _refusal\(raw\):'
+
+[[rule]]
 name = "only a command from the fixed list is ever sent over ssh"
 file = "src/mister_mcp/ssh.py"
 find = '        if name not in ALLOWED_COMMANDS:'

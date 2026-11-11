@@ -28,6 +28,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDFExpand
@@ -284,3 +285,34 @@ class _Cipher:
 def session_cipher(key: bytes, base: bytes, aad: bytes) -> _Cipher:
     """One direction's cipher for a connection."""
     return _Cipher(key, base, aad)
+
+
+#: What the voice hears when Zaparoo no longer accepts this computer's pairing.
+FORGOTTEN = "Zaparoo no longer accepts this computer's pairing. Pair again."
+
+
+class EncryptedSession:
+    """One encrypted connection to a secured Zaparoo: a fresh salt, its own keys and counters."""
+
+    def __init__(self, pairing: Pairing) -> None:
+        """A new session for `pairing`, with a new random salt."""
+        self._token = pairing.auth_token
+        self._salt = secrets.token_bytes(16)
+        c2s_key, s2c_key, c2s_base, s2c_base = session_keys(pairing.pairing_key, self._salt)
+        aad = f"{self._token}:ws".encode()
+        self._out = session_cipher(c2s_key, c2s_base, aad)
+        self._in = session_cipher(s2c_key, s2c_base, aad)
+
+    def first(self, text: str) -> str:
+        """The first frame: the request sealed, with the version, auth token and salt."""
+        sealed = base64.b64encode(self._out.seal(text.encode())).decode()
+        return json.dumps({"v": 1, "e": sealed, "t": self._token, "s": base64.b64encode(self._salt).decode()})
+
+    def read(self, raw: str) -> str:
+        """A frame from Zaparoo, opened; PairingError when it does not open with this session's key."""
+        try:
+            frame = json.loads(raw)
+            # RULE: a frame that does not decrypt is never believed
+            return self._in.open(base64.b64decode(frame["e"])).decode()
+        except (ValueError, KeyError, TypeError, InvalidTag) as error:
+            raise PairingError(FORGOTTEN) from error

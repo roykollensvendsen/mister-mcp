@@ -8,6 +8,10 @@ versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- With a kept pairing, the plugin speaks to Zaparoo over its encrypted
+  WebSocket: each connection gets a fresh salt and its own AES-256-GCM keys,
+  and a frame that does not decrypt is never believed. When Zaparoo wants
+  pairing, the voice says so with the pair command, instead of "not found".
 - `mister-mcp pair` pairs this computer with a secured Zaparoo Core
   (ADR-MM-005). The owner types the PIN the MiSTer shows, and it is not
   shown on screen. Both sides prove the PIN, and the pairing is kept in
