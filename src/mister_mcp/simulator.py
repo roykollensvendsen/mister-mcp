@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from mister_mcp.zaparoo import UnreachableError
+from mister_mcp.zaparoo import UnreachableError, ZaparooNotRunningError
 
 #: The address set aside for documentation, never anyone's real MiSTer.
 ADDRESS = "192.0.2.10"
@@ -42,9 +42,9 @@ def _game(system: str, name: str) -> dict[str, Any]:
 class SimulatedMister:
     """A transport that is the MiSTer: Zaparoo's answers, without a network."""
 
-    def __init__(self, *, on: bool = True) -> None:
-        """A MiSTer at its menu, or one that is switched off and answers nothing."""
-        self.on = on
+    def __init__(self, *, on: bool = True, zaparoo: bool = True) -> None:
+        """A MiSTer at its menu; one switched off, answering nothing; or one on without Zaparoo."""
+        self.on, self.zaparoo = on, zaparoo
         self.active: dict[str, Any] | None = None
         self.sent: list[dict[str, Any]] = []
         #: A further search result, as a test wants Zaparoo to have returned it.
@@ -66,6 +66,9 @@ class SimulatedMister:
         if not self.on:
             msg = "the simulated MiSTer is off"
             raise UnreachableError(msg)
+        if not self.zaparoo:
+            msg = "the simulated MiSTer is on, but Zaparoo is not running on it"
+            raise ZaparooNotRunningError(msg)
         self.sent.append(request)
         method, params = request["method"], request.get("params") or {}
         answer = {"jsonrpc": "2.0", "id": request["id"]}

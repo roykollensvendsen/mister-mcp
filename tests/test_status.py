@@ -38,3 +38,21 @@ def test_a_mister_that_does_not_answer_is_not_called_on_or_off():
     assert answer["on"] is None
     assert "off" in answer["say"]
     assert "network" in answer["say"]
+
+
+def test_a_mister_that_answers_without_zaparoo_is_called_on():
+    mister = SimulatedMister(zaparoo=False)
+    answer = _status(mister)
+    assert answer["success"] is False
+    assert answer["outcome"] == "unreachable"
+    assert answer["on"] is True
+    assert answer["say"].startswith("The MiSTer is on, but Zaparoo isn't running on it.")
+    assert "off" not in answer["say"]
+
+
+def test_search_and_launch_say_zaparoo_is_not_running_too():
+    mister = SimulatedMister(zaparoo=False)
+    service = MisterService(mister)
+    for answer in (asyncio.run(service.search("mages")), asyncio.run(service.launch(game="Micro Mages"))):
+        assert answer["outcome"] == "unreachable"
+        assert "Zaparoo isn't running" in answer["say"]

@@ -11,6 +11,8 @@ versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 - `mister_status`: whether the MiSTer is on, and the system and game it runs,
   read from Zaparoo Core. A MiSTer that does not answer is said to be off or
   off the network, never one of the two.
+- A MiSTer that is on but refuses the connection, because Zaparoo is not
+  running on it, is said to be on, with the step that starts Zaparoo.
 - `mister_search`: up to five games whose names hold every word said, among
   those Zaparoo has indexed, each with its system.
 - `mister_launch`: starts a game by name, or a system's core alone, then

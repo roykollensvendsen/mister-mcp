@@ -2,6 +2,7 @@
 """Only the calls ADR-MM-001 lists ever reach the MiSTer, and only texts built here start anything."""
 
 import asyncio
+import socket
 
 import pytest
 
@@ -9,7 +10,10 @@ from mister_mcp.simulator import SimulatedMister
 from mister_mcp.zaparoo import (
     ALLOWED_METHODS,
     NotAllowedError,
+    UnreachableError,
+    WebSocketTransport,
     Zaparoo,
+    ZaparooNotRunningError,
     game_text,
     system_text,
 )
@@ -65,3 +69,13 @@ def test_run_refuses_a_text_it_did_not_build():
     with pytest.raises(NotAllowedError):
         _run(Zaparoo(mister).run("**execute:reboot"))
     assert mister.sent == []
+
+
+def test_a_refused_connection_means_zaparoo_is_not_running():
+    with socket.socket() as free:
+        free.bind(("127.0.0.1", 0))
+        port = free.getsockname()[1]
+    transport = WebSocketTransport("127.0.0.1", port=port)
+    with pytest.raises(ZaparooNotRunningError) as raised:
+        asyncio.run(transport.send({"jsonrpc": "2.0", "id": 1, "method": "version"}, wait=1.0))
+    assert isinstance(raised.value, UnreachableError)
