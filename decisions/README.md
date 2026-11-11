@@ -33,6 +33,7 @@ decision nobody writes down.
 | [ADR-MM-002](ADR-MM-002-switch-the-tv-through-tv-mcps-own-tools.md) | Switch the TV through the TV plugin's own tools, only when it is on | Accepted |
 | [ADR-MM-003](ADR-MM-003-main-keeps-the-quality-levels.md) | Main keeps the quality levels, so a pull request never records them | Accepted |
 | [ADR-MM-004](ADR-MM-004-run-update-all-over-ssh-from-a-fixed-list.md) | Run update_all over SSH, by key, from a fixed list of commands | Accepted |
+| [ADR-MM-005](ADR-MM-005-pair-with-a-secured-zaparoo.md) | Pair with a secured Zaparoo, by a PIN the owner types | Accepted |
 
 What is deliberately left undone, and what would make each worth doing, is
 [`deferred.md`](deferred.md). A thing left undone with no trigger is a thing

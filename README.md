@@ -17,6 +17,13 @@ $ uv run mister-mcp status --simulate
 Simulated: The MiSTer is on, at its menu.
 ```
 
+Pairing with a secured Zaparoo, against a pretend one that saves nothing:
+
+```console
+$ uv run mister-mcp pair --simulate
+Simulated: Paired with the MiSTer. Nothing was saved.
+```
+
 The server itself, as a voice session starts it; it ends when its input does:
 
 ```console

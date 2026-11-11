@@ -11,6 +11,8 @@ license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
 dynamic = ["version"]
 dependencies = [
+    "cryptography==46.0.3",
+    "ecdsa==0.19.1",
     "mcp>=2.3",
     "websockets>=15",
 ]
@@ -69,3 +71,8 @@ omit = ["*/_version.py"]   # generated from the Git tag at build time
 [tool.coverage.report]
 show_missing = true
 exclude_also = ["if __name__ == .__main__.:"]
+
+# ecdsa ships no type information; only its curve and point types are used.
+[[tool.mypy.overrides]]
+module = ["ecdsa", "ecdsa.*"]
+ignore_missing_imports = true
