@@ -4,8 +4,8 @@
 import asyncio
 import re
 
-from mister_mcp import tv, zaparoo
-from mister_mcp.server import ANSWER_WITHIN, build_server
+from mister_mcp import ssh, tv, zaparoo
+from mister_mcp.server import ANSWER_WITHIN, UPDATE_WORKING, build_server
 from mister_mcp.service import MisterService
 from mister_mcp.simulator import SimulatedMister
 
@@ -119,6 +119,23 @@ def test_a_launchs_longest_path_finishes_within_half_a_minute():
         + tv.TV_WITHIN
     )
     assert longest <= 30.0
+
+
+def test_a_slow_update_start_is_answered_at_the_deadline_without_a_second_start(monkeypatch):
+    # Before the start: free_space, running and uptime; then the start and, if it is cut off, one
+    # more running check. Each ssh call may take CALL_WITHIN, so the voice cannot wait for it all.
+    longest = 5 * ssh.CALL_WITHIN
+    assert longest > ANSWER_WITHIN
+
+    class SlowStart:
+        async def confirm(self, token):
+            await asyncio.sleep(1)
+            return {"success": True, "outcome": "done", "say": "started"}
+
+    monkeypatch.setattr("mister_mcp.server.ANSWER_WITHIN", 0.01)
+    server = build_server(MisterService(SimulatedMister()), updater=SlowStart())
+    answer = _call(server, "mister_update_confirm", {"token": "t"})
+    assert (answer["outcome"], answer["say"]) == ("working", UPDATE_WORKING)
 
 
 def test_mister_launch_starts_the_game_and_says_so():
