@@ -29,8 +29,7 @@ def test_a_missing_key_is_said_in_the_owners_words():
         f"root@{ADDRESS}'s password: ",
     ):
         assert key_missing(stderr, ADDRESS) == (
-            "The MiSTer does not accept this computer's key. "
-            f"Run ssh-copy-id root@{ADDRESS} in a terminal."
+            f"The MiSTer does not accept this computer's key. Run ssh-copy-id root@{ADDRESS} in a terminal."
         )
         assert "password" not in key_missing(stderr, ADDRESS)
 

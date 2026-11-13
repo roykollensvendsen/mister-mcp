@@ -17,10 +17,7 @@ from typing import Protocol
 
 #: What the voice hears when the MiSTer refuses this computer's key, in the owner's words. No password
 #: is ever tried instead, not even the MiSTer's factory default: none is written anywhere.
-KEY_MISSING = (
-    "The MiSTer does not accept this computer's key. "
-    "Run ssh-copy-id root@{address} in a terminal."
-)
+KEY_MISSING = "The MiSTer does not accept this computer's key. Run ssh-copy-id root@{address} in a terminal."
 #: What the voice hears when the MiSTer's host key changed, as after a fresh SD card.
 HOST_CHANGED = (
     "The MiSTer's identity has changed, as it does after a fresh SD card. "
