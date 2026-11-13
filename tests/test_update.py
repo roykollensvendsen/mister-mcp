@@ -20,7 +20,7 @@ from mister_mcp.ssh import (
     explain,
     ssh_options,
 )
-from mister_mcp.updater import ASK_WITHIN, MIN_FREE_MB, SD_FULL, UpdateService
+from mister_mcp.updater import ASK_WITHIN, MIN_FREE_MB, SD_FULL, STARTED, UpdateService
 
 
 class _Clock:
@@ -357,3 +357,64 @@ def test_a_broken_history_file_gives_no_estimate(tmp_path):
 def test_an_unreadable_free_space_answer_is_refused():
     shell = SimulatedShell(free_mb=None)
     assert _run(_service(shell).request())["outcome"] == "refused"
+
+
+# -- a start that runs past the time limit -------------------------------------------------
+
+
+def _mister_whose_start_hangs(monkeypatch, *, starts=True):
+    """Two addresses for one MiSTer whose `start` outlasts CALL_WITHIN; what was sent, in order.
+
+    Each call still goes through the real ssh runner and its time limit, with a stand-in for ssh.
+    With `starts`, the hanging start has set update_all going, as a slow real one may have.
+    """
+    monkeypatch.setattr(mister_mcp.ssh, "CALL_WITHIN", 0.3)
+    name_of = {command: name for name, command in ALLOWED_COMMANDS.items()}
+    sent, going = [], []
+    free = MIN_FREE_MB * 2 * 1024
+    answers = {
+        "free_space": f"print('Filesystem 1024-blocks Used Available Capacity Mounted on');"
+        f"print('/dev/mmcblk0p1 31000000 1 {free} 1% /media/fat')",
+        "uptime": "print('900.0 100.0')",
+    }
+    real = SshShell.call
+
+    async def call(address, argv):
+        name = name_of[argv[-1]]
+        sent.append((address, name))
+        if name == "start":
+            going.extend([True] if starts else [])
+            return await real(address, _stand_in("import time; time.sleep(5)"))
+        if name == "running":
+            return await real(address, _stand_in(f"import sys; sys.exit({0 if going else 1})"))
+        return await real(address, _stand_in(answers.get(name, "pass")))
+
+    monkeypatch.setattr(SshShell, "call", staticmethod(call))
+    return SshShell(["mister.example", ADDRESS], key_file="~/.config/mister-mcp/ssh-key"), sent
+
+
+def test_a_command_cut_off_while_running_is_never_sent_again(monkeypatch):
+    shell, sent = _mister_whose_start_hangs(monkeypatch)
+    _run(shell.run("start"))
+    assert [what for what in sent if what[1] == "start"] == [("mister.example", "start")]
+
+
+def test_a_start_that_did_not_answer_is_checked_as_running_before_anything_is_said(monkeypatch):
+    shell, sent = _mister_whose_start_hangs(monkeypatch)
+    service = _service(shell)
+    token = _run(service.request())["token"]
+    answer = _run(service.confirm(token))
+    assert [name for _, name in sent].count("start") == 1
+    assert sent[-1][1] == "running"
+    assert (answer["outcome"], answer["say"]) == ("done", STARTED)
+
+
+def test_a_start_that_did_not_answer_and_is_not_running_is_never_called_started(monkeypatch):
+    shell, sent = _mister_whose_start_hangs(monkeypatch, starts=False)
+    service = _service(shell)
+    token = _run(service.request())["token"]
+    answer = _run(service.confirm(token))
+    assert [name for _, name in sent].count("start") == 1
+    assert answer["outcome"] == "unreachable"
+    assert "not running" in answer["say"]
+    assert _run(service.confirm(token))["outcome"] == "refused"
