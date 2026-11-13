@@ -177,6 +177,15 @@ def pairing_hmac(key: bytes, role: str, name: str, msg_a: bytes, msg_b: bytes) -
     return mac.digest()
 
 
+#: How the pairing waits; a name looked up on each wait, so tests can wait without real time.
+_sleep = asyncio.sleep
+
+
+async def _wait(seconds: float) -> None:
+    """Wait `seconds`."""
+    await _sleep(seconds)
+
+
 async def _call(post: Any, path: str, body: dict[str, str]) -> dict[str, Any]:  # noqa: ANN401
     status, answer = await post(path, body)
     if status != 200:  # noqa: PLR2004 - HTTP's own OK
@@ -184,7 +193,7 @@ async def _call(post: Any, path: str, body: dict[str, str]) -> dict[str, Any]:  
     return dict(answer)
 
 
-async def pair(pin: str, *, name: str, post: Any, pause: Any = asyncio.sleep) -> Pairing:  # noqa: ANN401
+async def pair(pin: str, *, name: str, post: Any, pause: Any = _wait) -> Pairing:  # noqa: ANN401
     """Pair as `name` with the PIN Zaparoo shows, through `post`; nothing is kept here."""
     # RULE: a pin that is not six digits is never sent
     if not _PIN.fullmatch(pin):
