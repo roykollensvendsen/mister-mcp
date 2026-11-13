@@ -11,11 +11,21 @@ from __future__ import annotations
 import base64
 import hashlib
 import secrets
+import time
 from typing import TYPE_CHECKING, Any
 
 from ecdsa.ellipticcurve import Point
 
-from mister_mcp.pairing import CURVE, U, V, confirm_keys, decode, encode, pairing_hmac
+from mister_mcp.pairing import (
+    CURVE,
+    ZAPAROO_PAIR_INTERVAL,
+    U,
+    V,
+    confirm_keys,
+    decode,
+    encode,
+    pairing_hmac,
+)
 from mister_mcp.ssh import ALLOWED_COMMANDS, SSH_FAILED, NotAllowedCommandError, Reply
 from mister_mcp.zaparoo import UnreachableError, ZaparooNotRunningError
 
@@ -233,15 +243,20 @@ class SimulatedPairing:
     #: The PIN the pretend Zaparoo shows.
     PIN = "000000"
 
-    def __init__(self) -> None:
-        """A pretend Zaparoo with a pairing window open."""
+    def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
+        """A pretend Zaparoo with a pairing window open, keeping time by `clock`."""
         self._pin = self.PIN.encode()
         self._alpha = 1 + secrets.randbelow(CURVE.order - 1)
         self._a = self._b = self._key = b""
         self._name = ""
+        self._clock, self._last = clock, float("-inf")
 
     async def __call__(self, path: str, body: dict[str, str]) -> tuple[int, dict[str, Any]]:
         """Zaparoo's answer to a POST of `body` to `path`."""
+        # RULE: a second pairing request within zaparoos interval is refused
+        if self._clock() - self._last < ZAPAROO_PAIR_INTERVAL:
+            return 429, {}  # Core's plain "Too Many Requests", as http_post hands it on
+        self._last = self._clock()
         if path == "/api/pair/start":
             return self._start(body)
         return self._finish(body)

@@ -54,9 +54,13 @@ V = Point(
 PAIRING_FILE = "zaparoo-pairing.json"
 #: Seconds one pairing request may take.
 PAIR_WITHIN = 10.0
-#: Seconds between the pairing's two requests. Zaparoo takes one /api/pair/* request a second
-#: from each address (docs/api/encryption.md, "Rate limit") and refuses a faster finish with 429.
-PAIR_SPACING = 1.5
+#: Zaparoo takes one /api/pair/* request per this many seconds from each address and answers a
+#: faster one with 429 "Too Many Requests". Source: zaparoo-core docs/api/encryption.md, "Rate
+#: limit: 1 req/sec per IP on /api/pair/*" (rate.Limit(1), burst 1 in pkg/api/server.go), read
+#: 2026-11-13; the same day a real MiSTer refused a finish sent milliseconds after its start.
+ZAPAROO_PAIR_INTERVAL = 1.0
+#: Seconds the pairing waits between its two requests: Zaparoo's interval, with room to spare.
+PAIR_SPACING = ZAPAROO_PAIR_INTERVAL + 0.5
 
 _PROTOCOL, _CURVE_NAME = b"zaparoo-v1", b"p256"
 _WIRE_ORDER = ("ux", "uy", "vx", "vy", "xx", "xy", "yx", "yy")
