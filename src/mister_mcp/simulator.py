@@ -237,13 +237,18 @@ class SimulatedShell:
         return self._reply("")
 
 
+def _now() -> float:
+    """The real clock, looked up when called, so tests can move it."""
+    return time.monotonic()
+
+
 class SimulatedPairing:
     """A pretend secured Zaparoo that pairs with SIMULATED_PIN, answering as Core's endpoints do."""
 
     #: The PIN the pretend Zaparoo shows.
     PIN = "000000"
 
-    def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(self, clock: Callable[[], float] = _now) -> None:
         """A pretend Zaparoo with a pairing window open, keeping time by `clock`."""
         self._pin = self.PIN.encode()
         self._alpha = 1 + secrets.randbelow(CURVE.order - 1)
