@@ -121,6 +121,12 @@ class Reply:
         """Whether the MiSTer answered: ssh itself fails with SSH_FAILED."""
         return self.code != SSH_FAILED
 
+    @property
+    def settled(self) -> bool:
+        """Whether no other address may be tried: the MiSTer answered, or the command may have run."""
+        # RULE: a command cut off while running is never sent again
+        return self.reached or self.cut_off
+
 
 class Shell(Protocol):
     """Runs one command from the fixed list on the MiSTer."""
@@ -150,8 +156,7 @@ class SshShell:
         reply = Reply(SSH_FAILED, "", "no address", next(iter(self._addresses), ""))
         for address in self._addresses:
             reply = await self.call(address, self.argv(address, name))
-            # RULE: a command cut off while running is never sent again
-            if reply.reached or reply.cut_off:
+            if reply.settled:
                 return reply
         return reply
 
