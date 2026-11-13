@@ -284,3 +284,9 @@ name = "a running check that got no answer is never said as not running"
 file = "src/mister_mcp/updater.py"
 find = '        if still\.code == PGREP_NONE:'
 replace = '        if True:'
+
+[[rule]]
+name = "the finish waits out zaparoos one request a second"
+file = "src/mister_mcp/pairing.py"
+find = '    await pause(PAIR_SPACING)'
+replace = '    pass'

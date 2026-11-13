@@ -248,6 +248,29 @@ def test_a_refused_pairing_says_why_and_what_to_do(start, finish, said):
         _run(pair(PIN, name=NAME, post=FakeZaparoo(status_start=start, status_finish=finish)))
 
 
+class RateLimitedZaparoo(FakeZaparoo):
+    """Zaparoo's own limit on /api/pair/*: one request per second from each address."""
+
+    def __init__(self):
+        super().__init__()
+        self.clock, self.last = 0.0, None
+
+    async def pause(self, seconds):
+        self.clock += seconds
+
+    async def __call__(self, path, body):
+        if self.last is not None and self.clock - self.last < 1.0:
+            return 429, {"error": "rate limit exceeded"}
+        self.last = self.clock
+        return await super().__call__(path, body)
+
+
+def test_the_finish_waits_out_zaparoos_one_request_a_second():
+    zaparoo = RateLimitedZaparoo()
+    got = _run(pair(PIN, name=NAME, post=zaparoo, pause=zaparoo.pause))
+    assert got.auth_token == TOKEN
+
+
 def test_a_wrong_pin_is_said_as_a_wrong_pin():
     with pytest.raises(PairingError, match="did not accept that PIN"):
         _run(pair("111111", name=NAME, post=FakeZaparoo()))

@@ -54,6 +54,9 @@ V = Point(
 PAIRING_FILE = "zaparoo-pairing.json"
 #: Seconds one pairing request may take.
 PAIR_WITHIN = 10.0
+#: Seconds between the pairing's two requests. Zaparoo takes one /api/pair/* request a second
+#: from each address (docs/api/encryption.md, "Rate limit") and refuses a faster finish with 429.
+PAIR_SPACING = 1.5
 
 _PROTOCOL, _CURVE_NAME = b"zaparoo-v1", b"p256"
 _WIRE_ORDER = ("ux", "uy", "vx", "vy", "xx", "xy", "yx", "yy")
@@ -177,7 +180,7 @@ async def _call(post: Any, path: str, body: dict[str, str]) -> dict[str, Any]:  
     return dict(answer)
 
 
-async def pair(pin: str, *, name: str, post: Any) -> Pairing:  # noqa: ANN401
+async def pair(pin: str, *, name: str, post: Any, pause: Any = asyncio.sleep) -> Pairing:  # noqa: ANN401
     """Pair as `name` with the PIN Zaparoo shows, through `post`; nothing is kept here."""
     # RULE: a pin that is not six digits is never sent
     if not _PIN.fullmatch(pin):
@@ -189,6 +192,8 @@ async def pair(pin: str, *, name: str, post: Any) -> Pairing:  # noqa: ANN401
     msg_b = base64.b64decode(started["pake"])
     a_key, b_key, pairing_key = confirm_keys(client.update(msg_b), msg_a, msg_b)
     confirm = base64.b64encode(pairing_hmac(a_key, "client", name, msg_a, msg_b)).decode()
+    # RULE: the finish waits out zaparoos one request a second
+    await pause(PAIR_SPACING)
     finished = await _call(post, "/api/pair/finish", {"session": started["session"], "confirm": confirm})
     expected = pairing_hmac(b_key, "server", name, msg_a, msg_b)
     # RULE: a server that cannot prove the pin is never trusted
