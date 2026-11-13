@@ -223,6 +223,7 @@ replace = '            return base64.b64decode(frame["e"]).decode(errors="replac
 name = "a refused login is said as needing pairing"
 file = "src/mister_mcp/zaparoo.py"
 find = '        if _refusal\(raw\):'
+replace = '        if False:'
 
 [[rule]]
 name = "only a command from the fixed list is ever sent over ssh"
