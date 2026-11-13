@@ -69,14 +69,31 @@ _PIN = re.compile(r"\d{6}")
 WRONG_PIN = (
     "Zaparoo did not accept that PIN. Check the six digits on the MiSTer, then run the pair command again."
 )
+#: A PIN is good for this many wrong tries and this many seconds. Source: zaparoo-core
+#: pkg/api/pairing.go, pairingMaxAttempts = 3 and pairingPINTTL = 5 * time.Minute, read 2026-11-13.
+PIN_TRIES = 3
+PIN_LIFETIME = 5 * 60.0
+NEW_PIN = (
+    "That PIN can no longer be used. Start a new pairing on the MiSTer to get a new PIN, "
+    "then run the pair command again and type it."
+)
+FULL = "Zaparoo already has as many paired devices as it allows. Remove one in Zaparoo, then run pair again."
 #: What each refusal Zaparoo's pairing endpoints give means, with what to do next.
 REFUSALS = {
     400: "Zaparoo did not understand the pairing request. Run the pair command again.",
     401: WRONG_PIN,
-    403: "Zaparoo will not pair again with this PIN. Start a new pairing on the MiSTer, then run pair again.",
+    403: NEW_PIN,
     404: "The pairing took too long. Start a new pairing on the MiSTer, then run the pair command.",
-    410: "The PIN has expired. Start a new pairing on the MiSTer, then run the pair command.",
+    410: NEW_PIN,
     429: "Zaparoo asked for a pause. Wait a moment, then run the pair command again.",
+}
+#: Zaparoo's own words for a refusal, where one status means more than one thing.
+REASONS = {
+    # RULE: a spent or expired pin is said as needing a new pin
+    "no pairing in progress": NEW_PIN,
+    "too many failed attempts": NEW_PIN,
+    "pairing expired": NEW_PIN,
+    "maximum paired clients reached": FULL,
 }
 UNTRUSTED = (
     "The MiSTer could not prove it knows the PIN, so nothing was saved. "
@@ -189,7 +206,8 @@ async def _wait(seconds: float) -> None:
 async def _call(post: Any, path: str, body: dict[str, str]) -> dict[str, Any]:  # noqa: ANN401
     status, answer = await post(path, body)
     if status != 200:  # noqa: PLR2004 - HTTP's own OK
-        raise PairingError(REFUSALS.get(status, REFUSALS[400]))
+        said = REFUSALS.get(status, REFUSALS[400])
+        raise PairingError(REASONS.get(str(answer.get("error", "")), said))
     return dict(answer)
 
 
@@ -215,6 +233,15 @@ async def pair(pin: str, *, name: str, post: Any, pause: Any = _wait) -> Pairing
     return Pairing(auth_token=str(finished["authToken"]), pairing_key=pairing_key)
 
 
+def _error_body(raw: bytes) -> dict[str, Any]:
+    """A refusal's JSON body, as Core writes it ({"error": ...}); empty when it is not one."""
+    try:
+        body = json.loads(raw)
+    except ValueError:
+        return {}
+    return body if isinstance(body, dict) else {}
+
+
 def http_post(address: str, port: int) -> Any:  # noqa: ANN401
     """POST JSON to Zaparoo's pairing endpoints at `address`:`port`, answering (status, body)."""
 
@@ -229,7 +256,7 @@ def http_post(address: str, port: int) -> Any:  # noqa: ANN401
             with urllib.request.urlopen(request, timeout=PAIR_WITHIN) as answer:  # noqa: S310
                 return answer.status, json.loads(answer.read() or b"{}")
         except urllib.error.HTTPError as refused:
-            return refused.code, {}
+            return refused.code, _error_body(refused.read())
 
     async def post(path: str, body: dict[str, str]) -> tuple[int, dict[str, Any]]:
         return await asyncio.to_thread(send, path, body)
