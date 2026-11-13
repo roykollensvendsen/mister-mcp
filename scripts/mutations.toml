@@ -290,3 +290,9 @@ name = "the finish waits out zaparoos one request a second"
 file = "src/mister_mcp/pairing.py"
 find = '    await pause(PAIR_SPACING)'
 replace = '    pass'
+
+[[rule]]
+name = "a second pairing request within zaparoos interval is refused"
+file = "src/mister_mcp/simulator.py"
+find = '        if self._clock\(\) - self._last < ZAPAROO_PAIR_INTERVAL:'
+replace = '        if False:'

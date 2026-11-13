@@ -29,6 +29,7 @@ from mister_mcp import cli
 from mister_mcp.pairing import (
     CURVE,
     PAIRING_FILE,
+    ZAPAROO_PAIR_INTERVAL,
     Pairing,
     PairingError,
     PakeClient,
@@ -248,27 +249,35 @@ def test_a_refused_pairing_says_why_and_what_to_do(start, finish, said):
         _run(pair(PIN, name=NAME, post=FakeZaparoo(status_start=start, status_finish=finish)))
 
 
-class RateLimitedZaparoo(FakeZaparoo):
-    """Zaparoo's own limit on /api/pair/*: one request per second from each address."""
+class Clock:
+    """Time that moves only when the pairing pauses."""
 
     def __init__(self):
-        super().__init__()
-        self.clock, self.last = 0.0, None
+        self.now = 0.0
+
+    def __call__(self):
+        return self.now
 
     async def pause(self, seconds):
-        self.clock += seconds
-
-    async def __call__(self, path, body):
-        if self.last is not None and self.clock - self.last < 1.0:
-            return 429, {"error": "rate limit exceeded"}
-        self.last = self.clock
-        return await super().__call__(path, body)
+        self.now += seconds
 
 
 def test_the_finish_waits_out_zaparoos_one_request_a_second():
-    zaparoo = RateLimitedZaparoo()
-    got = _run(pair(PIN, name=NAME, post=zaparoo, pause=zaparoo.pause))
-    assert got.auth_token == TOKEN
+    clock = Clock()
+    got = _run(pair(SimulatedPairing.PIN, name=NAME, post=SimulatedPairing(clock), pause=clock.pause))
+    assert got.auth_token == "simulated"  # noqa: S105 - the simulated Zaparoo's made-up token
+
+
+def test_a_second_pairing_request_within_zaparoos_interval_is_refused():
+    clock = Clock()
+    zaparoo = SimulatedPairing(clock)
+    client = PakeClient(SimulatedPairing.PIN)
+    start = {"pake": base64.b64encode(client.message()).decode(), "name": NAME}
+    assert _run(zaparoo("/api/pair/start", start))[0] == 200
+    clock.now += ZAPAROO_PAIR_INTERVAL - 0.01
+    assert _run(zaparoo("/api/pair/finish", {"session": "simulated", "confirm": ""})) == (429, {})
+    with pytest.raises(PairingError, match="asked for a pause"):
+        _run(pair(SimulatedPairing.PIN, name=NAME, post=zaparoo, pause=clock.pause))
 
 
 def test_a_wrong_pin_is_said_as_a_wrong_pin():
