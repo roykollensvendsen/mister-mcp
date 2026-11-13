@@ -40,6 +40,13 @@ FAILED = f"update_all failed. Its log on the MiSTer is {SAVED_LOG}; ask the mana
 STOPPED = "update_all stopped before it finished. Ask me to start it again."
 NONE_KNOWN = "No update_all run is known since the MiSTer started. Ask me to start one."
 STALE = "That question has run out, or was already answered. Ask me to run update_all again."
+#: What pgrep answers when nothing matches; ssh's own failures and a cut-off call are 255.
+PGREP_NONE = 1
+#: A start cut off, then a `running` check that got no answer either: it may be running.
+MAYBE_STARTED = (
+    "The MiSTer took too long to answer, so update_all may have started. "
+    "Ask me how the update is going before you start it again."
+)
 #: A start cut off at the time limit, after which update_all was found not running.
 NOT_STARTED = (
     "The MiSTer took too long to answer the start, and update_all is not running. "
@@ -133,22 +140,19 @@ class UpdateService:
 
     async def confirm(self, token: str) -> dict[str, Any]:
         """The owner's yes: check once more, then start update_all detached."""
-        until = self._asked.get(token)
+        # RULE: the yes is spent before the start goes out
+        until = self._asked.pop(token, None)
         # RULE: an update token works once and only while fresh
         if until is None or self._clock() > until:
-            self._asked.pop(token, None)
             return _answer("refused", STALE)
         refusal = await self._not_ready()
         if refusal:
-            self._asked.pop(token, None)
             return refusal
         started = await self._shell.run("start")
         if started.cut_off:
-            self._asked.pop(token, None)
             return await self._after_cut_off()
         if not started.reached:
             return _unreached(started)
-        self._asked.pop(token, None)
         return self._started()
 
     async def _after_cut_off(self) -> dict[str, Any]:
@@ -157,7 +161,10 @@ class UpdateService:
         still = await self._shell.run("running")
         if still.code == 0:
             return self._started()
-        return _answer("unreachable", NOT_STARTED)
+        # RULE: a running check that got no answer is never said as not running
+        if still.code == PGREP_NONE:
+            return _answer("unreachable", NOT_STARTED)
+        return _answer("working", MAYBE_STARTED)
 
     def _started(self) -> dict[str, Any]:
         self._started_at, self._kept = self._clock(), False

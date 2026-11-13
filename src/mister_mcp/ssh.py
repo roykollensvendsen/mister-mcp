@@ -113,7 +113,8 @@ class Reply:
     out: str
     err: str
     address: str
-    #: The call was connected and cut off at CALL_WITHIN, so the command may have run.
+    #: The call outlived CALL_WITHIN and was cut off, so the command may have run. A slow key
+    #: exchange after ConnectTimeout can also end here: that errs toward never sending it again.
     cut_off: bool = False
 
     @property

@@ -10,6 +10,7 @@ import sys
 import pytest
 
 import mister_mcp.ssh
+from mister_mcp.server import UPDATE_WORKING
 from mister_mcp.simulator import ADDRESS, SimulatedMister, SimulatedShell
 from mister_mcp.ssh import (
     ALLOWED_COMMANDS,
@@ -20,7 +21,9 @@ from mister_mcp.ssh import (
     explain,
     ssh_options,
 )
-from mister_mcp.updater import ASK_WITHIN, MIN_FREE_MB, SD_FULL, STARTED, UpdateService
+from mister_mcp.updater import ASK_WITHIN, MAYBE_STARTED, MIN_FREE_MB, SD_FULL, STARTED, UpdateService
+
+_real_call = SshShell.call
 
 
 class _Clock:
@@ -418,3 +421,51 @@ def test_a_start_that_did_not_answer_and_is_not_running_is_never_called_started(
     assert answer["outcome"] == "unreachable"
     assert "not running" in answer["say"]
     assert _run(service.confirm(token))["outcome"] == "refused"
+
+
+def _mister_whose_running_check_fails(monkeypatch, how):
+    """A start that is cut off, then a `running` check that is cut off too or does not answer."""
+    shell, sent = _mister_whose_start_hangs(monkeypatch)
+    hanging = SshShell.call
+
+    async def call(address, argv):
+        if "start" in (name for _, name in sent) and argv[-1] == ALLOWED_COMMANDS["running"]:
+            sent.append((address, "running"))
+            if how == "cut off":
+                return await _real_call(address, _stand_in("import time; time.sleep(5)"))
+            return Reply(SSH_FAILED, "", "ssh: connect to host port 22: No route to host", address)
+        return await hanging(address, argv)
+
+    monkeypatch.setattr(SshShell, "call", staticmethod(call))
+    return shell, sent
+
+
+@pytest.mark.parametrize("how", ["cut off", "not answering"])
+def test_a_running_check_that_got_no_answer_is_never_said_as_not_running(monkeypatch, how):
+    shell, sent = _mister_whose_running_check_fails(monkeypatch, how)
+    service = _service(shell)
+    token = _run(service.request())["token"]
+    answer = _run(service.confirm(token))
+    assert [name for _, name in sent].count("start") == 1
+    assert answer["outcome"] == "working"
+    assert answer["say"] == MAYBE_STARTED
+    assert "not running" not in answer["say"]
+    assert _run(service.confirm(token))["outcome"] == "refused"
+
+
+def test_the_yes_is_spent_before_the_start_goes_out(monkeypatch):
+    shell, sent = _mister_whose_start_hangs(monkeypatch)
+    service = _service(shell)
+    token = _run(service.request())["token"]
+
+    async def twice():
+        return await asyncio.gather(service.confirm(token), service.confirm(token))
+
+    _run(twice())
+    assert [name for _, name in sent].count("start") == 1
+
+
+def test_a_slow_update_start_never_invites_a_second_start():
+    assert "update is going" in UPDATE_WORKING
+    assert "again" not in UPDATE_WORKING.replace("start it again", "")
+    assert "do not start it again" in UPDATE_WORKING.lower()

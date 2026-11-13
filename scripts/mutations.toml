@@ -272,3 +272,15 @@ name = "a start that did not answer is checked as running before anything is sai
 file = "src/mister_mcp/updater.py"
 find = '        if still\.code == 0:'
 replace = '        if False:'
+
+[[rule]]
+name = "the yes is spent before the start goes out"
+file = "src/mister_mcp/updater.py"
+find = '        until = self\._asked\.pop\(token, None\)'
+replace = '        until = self._asked.get(token)'
+
+[[rule]]
+name = "a running check that got no answer is never said as not running"
+file = "src/mister_mcp/updater.py"
+find = '        if still\.code == PGREP_NONE:'
+replace = '        if True:'

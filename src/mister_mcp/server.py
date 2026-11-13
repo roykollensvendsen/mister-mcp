@@ -35,6 +35,12 @@ SIMULATED = "A SIMULATED MiSTer, not a real one: say so. "
 ANSWER_WITHIN = 12.0
 #: What the voice hears when a tool is still working by then; the work carries on.
 WORKING = "That is taking a while, and it carries on. Ask again in a moment to hear how it went."
+#: What the voice hears when update_all's start is still going by then. A second yes now could
+#: start it twice, so it says to ask how it is going instead.
+UPDATE_WORKING = (
+    "The start of update_all is taking a while, and it carries on. "
+    "Ask me how the update is going in a moment. Do not start it again."
+)
 #: What the voice hears when a start is still going by then. Asking again would start it twice.
 LAUNCH_WORKING = "The start is taking a while, and it carries on. Ask what it is playing in a moment."
 #: What the voice hears when mister-mcp itself fails, so it never hears only that the tool failed.
@@ -164,6 +170,7 @@ def _update_tools(guarded: _Guarded, updater: UpdateService) -> None:
         return await updater.request()
 
     @guarded.tool(
+        working=UPDATE_WORKING,
         annotations=CHANGES,
         description=(
             "Go ahead with update_all.\nOnly after the owner clearly said yes to the question"
