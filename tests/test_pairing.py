@@ -28,12 +28,18 @@ from ecdsa.ellipticcurve import Point
 from mister_mcp import cli
 from mister_mcp.pairing import (
     CURVE,
+    FULL,
+    NEW_PIN,
     PAIRING_FILE,
+    PIN_LIFETIME,
+    PIN_TRIES,
+    WRONG_PIN,
     Pairing,
     PairingError,
     PakeClient,
     U,
     V,
+    _error_body,
     confirm_keys,
     decode,
     http_post,
@@ -238,7 +244,7 @@ def test_pairing_gives_the_auth_token_and_pairing_key():
     ("start", "finish", "said"),
     [
         (200, 401, "did not accept that PIN"),
-        (410, 200, "has expired"),
+        (410, 200, "new PIN"),
         (403, 200, "Start a new pairing"),
         (429, 200, "Wait a moment"),
     ],
@@ -246,6 +252,75 @@ def test_pairing_gives_the_auth_token_and_pairing_key():
 def test_a_refused_pairing_says_why_and_what_to_do(start, finish, said):
     with pytest.raises(PairingError, match=said):
         _run(pair(PIN, name=NAME, post=FakeZaparoo(status_start=start, status_finish=finish)))
+
+
+class _Clock:
+    """Time that moves only when a test moves it."""
+
+    def __init__(self):
+        self.now = 1000.0
+
+    def __call__(self):
+        return self.now
+
+
+def test_a_pin_is_spent_after_three_wrong_tries():
+    zaparoo = SimulatedPairing()
+    said = []
+    for _ in range(3):
+        with pytest.raises(PairingError) as refused:
+            _run(pair("123456", name=NAME, post=zaparoo))
+        said.append(str(refused.value))
+    assert said[:2] == [WRONG_PIN, WRONG_PIN]
+    assert said[2] == NEW_PIN
+    with pytest.raises(PairingError, match=NEW_PIN):
+        _run(pair(SimulatedPairing.PIN, name=NAME, post=zaparoo))
+
+
+def test_a_pin_older_than_five_minutes_is_refused():
+    clock = _Clock()
+    zaparoo = SimulatedPairing(clock=clock)
+    clock.now += PIN_LIFETIME + 1
+    with pytest.raises(PairingError, match=NEW_PIN):
+        _run(pair(SimulatedPairing.PIN, name=NAME, post=zaparoo))
+    with pytest.raises(PairingError, match=NEW_PIN):
+        _run(pair(SimulatedPairing.PIN, name=NAME, post=zaparoo))
+
+
+def test_a_pin_still_within_its_five_minutes_and_three_tries_pairs():
+    clock = _Clock()
+    zaparoo = SimulatedPairing(clock=clock)
+    for _ in range(PIN_TRIES - 1):
+        with pytest.raises(PairingError, match="did not accept that PIN"):
+            _run(pair("123456", name=NAME, post=zaparoo))
+    clock.now += PIN_LIFETIME - 1
+    assert _run(pair(SimulatedPairing.PIN, name=NAME, post=zaparoo)).auth_token == "simulated"  # noqa: S105
+
+
+@pytest.mark.parametrize(
+    ("status", "error"),
+    [
+        (400, "no pairing in progress"),
+        (403, "too many failed attempts"),
+        (410, "pairing expired"),
+    ],
+)
+def test_a_spent_or_expired_pin_is_said_as_needing_a_new_pin(status, error):
+    async def zaparoo(path, body):
+        return status, {"error": error}
+
+    with pytest.raises(PairingError) as refused:
+        _run(pair(PIN, name=NAME, post=zaparoo))
+    assert str(refused.value) == NEW_PIN
+
+
+def test_a_full_zaparoo_is_said_as_full_not_as_a_spent_pin():
+    async def zaparoo(path, body):
+        return 403, {"error": "maximum paired clients reached"}
+
+    with pytest.raises(PairingError) as refused:
+        _run(pair(PIN, name=NAME, post=zaparoo))
+    assert str(refused.value) == FULL
 
 
 def test_a_wrong_pin_is_said_as_a_wrong_pin():
@@ -363,7 +438,7 @@ class _Endpoint(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         status = 200 if self.path == "/api/pair/start" else 410
-        reply = json.dumps({"echo": body["name"]}).encode()
+        reply = json.dumps({"echo": body["name"]} if status == 200 else {"error": "pairing expired"}).encode()
         self.send_response(status)
         self.send_header("Content-Length", str(len(reply)))
         self.end_headers()
@@ -379,9 +454,14 @@ def test_the_pairing_posts_are_json_and_a_refusal_is_its_status():
     try:
         post = http_post("127.0.0.1", server.server_address[1])
         assert asyncio.run(post("/api/pair/start", {"name": "test"})) == (200, {"echo": "test"})
-        assert asyncio.run(post("/api/pair/finish", {"name": "test"})) == (410, {})
+        assert asyncio.run(post("/api/pair/finish", {"name": "test"})) == (410, {"error": "pairing expired"})
     finally:
         server.shutdown()
+
+
+@pytest.mark.parametrize("raw", [b"Too Many Requests\n", b"[1]", b""])
+def test_a_refusal_body_that_is_not_zaparoos_json_is_read_as_none(raw):
+    assert _error_body(raw) == {}
 
 
 def test_a_damaged_pairing_file_says_to_pair_again(tmp_path):

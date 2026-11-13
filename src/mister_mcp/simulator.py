@@ -11,11 +11,22 @@ from __future__ import annotations
 import base64
 import hashlib
 import secrets
+import time
 from typing import TYPE_CHECKING, Any
 
 from ecdsa.ellipticcurve import Point
 
-from mister_mcp.pairing import CURVE, U, V, confirm_keys, decode, encode, pairing_hmac
+from mister_mcp.pairing import (
+    CURVE,
+    PIN_LIFETIME,
+    PIN_TRIES,
+    U,
+    V,
+    confirm_keys,
+    decode,
+    encode,
+    pairing_hmac,
+)
 from mister_mcp.ssh import ALLOWED_COMMANDS, SSH_FAILED, NotAllowedCommandError, Reply
 from mister_mcp.zaparoo import UnreachableError, ZaparooNotRunningError
 
@@ -227,18 +238,24 @@ class SimulatedShell:
         return self._reply("")
 
 
+def _now() -> float:
+    """The real clock, looked up when called, so tests can move it."""
+    return time.monotonic()
+
+
 class SimulatedPairing:
     """A pretend secured Zaparoo that pairs with SIMULATED_PIN, answering as Core's endpoints do."""
 
     #: The PIN the pretend Zaparoo shows.
     PIN = "000000"
 
-    def __init__(self) -> None:
-        """A pretend Zaparoo with a pairing window open."""
+    def __init__(self, clock: Callable[[], float] = _now) -> None:
+        """A pretend Zaparoo with a pairing window open, keeping time by `clock`."""
         self._pin = self.PIN.encode()
         self._alpha = 1 + secrets.randbelow(CURVE.order - 1)
         self._a = self._b = self._key = b""
         self._name = ""
+        self._clock, self._shown, self._wrong, self._live = clock, clock(), 0, True
 
     async def __call__(self, path: str, body: dict[str, str]) -> tuple[int, dict[str, Any]]:
         """Zaparoo's answer to a POST of `body` to `path`."""
@@ -247,6 +264,12 @@ class SimulatedPairing:
         return self._finish(body)
 
     def _start(self, body: dict[str, str]) -> tuple[int, dict[str, Any]]:
+        if not self._live:
+            return 400, {"error": "no pairing in progress"}
+        # RULE: a pin older than five minutes is refused
+        if self._clock() - self._shown > PIN_LIFETIME:
+            self._live = False
+            return 410, {"error": "pairing expired"}
         self._a, self._name = base64.b64decode(body["pake"]), body["name"]
         x = decode(self._a, role=0)["x"]
         pw = int.from_bytes(self._pin, "big")
@@ -262,7 +285,16 @@ class SimulatedPairing:
     def _finish(self, body: dict[str, str]) -> tuple[int, dict[str, Any]]:
         a_key, b_key, _ = confirm_keys(self._key, self._a, self._b)
         if base64.b64decode(body["confirm"]) != pairing_hmac(a_key, "client", self._name, self._a, self._b):
-            return 401, {}
+            return self._wrong_pin()
+        self._live = False  # a PIN pairs once
         server = pairing_hmac(b_key, "server", self._name, self._a, self._b)
         confirm = base64.b64encode(server).decode()
         return 200, {"authToken": "simulated", "clientId": "simulated", "confirm": confirm}
+
+    def _wrong_pin(self) -> tuple[int, dict[str, Any]]:
+        self._wrong += 1
+        # RULE: a pin is spent after three wrong tries
+        if self._wrong >= PIN_TRIES:
+            self._live = False
+            return 403, {"error": "too many failed attempts"}
+        return 401, {"error": "wrong PIN"}

@@ -260,3 +260,21 @@ name = "a running game is named in the question"
 file = "src/mister_mcp/updater.py"
 find = '        if active:'
 replace = '        if False:'
+
+[[rule]]
+name = "a pin older than five minutes is refused"
+file = "src/mister_mcp/simulator.py"
+find = '        if self\._clock\(\) - self\._shown > PIN_LIFETIME:'
+replace = '        if False:'
+
+[[rule]]
+name = "a pin is spent after three wrong tries"
+file = "src/mister_mcp/simulator.py"
+find = '        if self\._wrong >= PIN_TRIES:'
+replace = '        if False:'
+
+[[rule]]
+name = "a spent or expired pin is said as needing a new pin"
+file = "src/mister_mcp/pairing.py"
+find = '    "no pairing in progress": NEW_PIN,'
+replace = '    "no pairing in progress": REFUSALS[400],'
