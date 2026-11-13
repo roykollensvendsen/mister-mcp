@@ -40,6 +40,11 @@ FAILED = f"update_all failed. Its log on the MiSTer is {SAVED_LOG}; ask the mana
 STOPPED = "update_all stopped before it finished. Ask me to start it again."
 NONE_KNOWN = "No update_all run is known since the MiSTer started. Ask me to start one."
 STALE = "That question has run out, or was already answered. Ask me to run update_all again."
+#: A start cut off at the time limit, after which update_all was found not running.
+NOT_STARTED = (
+    "The MiSTer took too long to answer the start, and update_all is not running. "
+    "Ask to start update_all again."
+)
 STARTED = (
     "Started update_all. It may take several minutes, and may restart the MiSTer at the end. "
     "Ask how the update is going."
@@ -138,9 +143,23 @@ class UpdateService:
             self._asked.pop(token, None)
             return refusal
         started = await self._shell.run("start")
+        if started.cut_off:
+            self._asked.pop(token, None)
+            return await self._after_cut_off()
         if not started.reached:
             return _unreached(started)
         self._asked.pop(token, None)
+        return self._started()
+
+    async def _after_cut_off(self) -> dict[str, Any]:
+        """A start that may have run: what `running` says, never a second start."""
+        # RULE: a start that did not answer is checked as running before anything is said
+        still = await self._shell.run("running")
+        if still.code == 0:
+            return self._started()
+        return _answer("unreachable", NOT_STARTED)
+
+    def _started(self) -> dict[str, Any]:
         self._started_at, self._kept = self._clock(), False
         return _answer("done", STARTED)
 

@@ -113,6 +113,8 @@ class Reply:
     out: str
     err: str
     address: str
+    #: The call was connected and cut off at CALL_WITHIN, so the command may have run.
+    cut_off: bool = False
 
     @property
     def reached(self) -> bool:
@@ -148,7 +150,8 @@ class SshShell:
         reply = Reply(SSH_FAILED, "", "no address", next(iter(self._addresses), ""))
         for address in self._addresses:
             reply = await self.call(address, self.argv(address, name))
-            if reply.reached:
+            # RULE: a command cut off while running is never sent again
+            if reply.reached or reply.cut_off:
                 return reply
         return reply
 
@@ -175,6 +178,6 @@ async def _answer(process: asyncio.subprocess.Process, address: str) -> Reply:
     except TimeoutError:
         process.kill()
         await process.wait()
-        return Reply(SSH_FAILED, "", "timed out", address)
+        return Reply(SSH_FAILED, "", "timed out", address, cut_off=True)
     code = process.returncode or 0
     return Reply(code, out.decode(errors="replace"), err.decode(errors="replace"), address)
