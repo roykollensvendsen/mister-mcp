@@ -20,7 +20,7 @@ from mister_mcp.pairing import (
 )
 from mister_mcp.server import build_server
 from mister_mcp.service import MisterService
-from mister_mcp.settings import FOLDER, SettingsError, load_settings, settings_path
+from mister_mcp.settings import FOLDER, SettingsError, load_settings, region_note, settings_path
 from mister_mcp.simulator import SimulatedMister, SimulatedPairing, SimulatedShell
 from mister_mcp.ssh import SshShell
 from mister_mcp.tv import SimulatedTvPlugin, TvPlugin, TvSwitch
@@ -69,7 +69,9 @@ def _service(*, simulate: bool, settings_file: str | None) -> tuple[MisterServic
     transport: Transport = FallbackTransport(where, reach=reach)
     shell = SshShell(where, key_file=str(SSH_KEY))
     updater = UpdateService(shell, transport, history=UPDATE_RUNS.expanduser())
-    return MisterService(transport, tv=tv_from(settings.tv)), updater
+    service = MisterService(transport, tv=tv_from(settings.tv), region_order=settings.region_order)
+    service.region_note = region_note(settings)
+    return service, updater
 
 
 def framing_from_pairing() -> Callable[[], EncryptedSession] | None:
@@ -112,12 +114,19 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.write(f"mister-mcp: {error}\n")
         return 2
     if args.command == "serve":  # pragma: no cover - runs until stdin closes
-        asyncio.run(build_server(service, updater=updater, simulated=args.simulate).run_stdio_async())
-        return 0
+        return _serve(service, updater, simulated=args.simulate)
     answer = asyncio.run(service.status())
     prefix = "Simulated: " if args.simulate else ""
     sys.stdout.write(prefix + answer["say"] + "\n")
     return 0 if answer["success"] else 1
+
+
+def _serve(service: MisterService, updater: UpdateService, *, simulated: bool) -> int:  # pragma: no cover
+    """Serve the tools over stdio until stdin closes, first saying which region order is used."""
+    if service.region_note:
+        sys.stderr.write(f"mister-mcp: {service.region_note}\n")
+    asyncio.run(build_server(service, updater=updater, simulated=simulated).run_stdio_async())
+    return 0
 
 
 def _address(settings_file: str | None) -> tuple[str, int]:

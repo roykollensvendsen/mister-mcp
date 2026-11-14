@@ -314,3 +314,81 @@ name = "a spent or expired pin is said as needing a new pin"
 file = "src/mister_mcp/pairing.py"
 find = '    "no pairing in progress": NEW_PIN,'
 replace = '    "no pairing in progress": REFUSALS[400],'
+
+[[rule]]
+name = "a region is read from the file name as no intro and goodtools write it"
+file = "src/mister_mcp/versions.py"
+find = '    region = next\(\(r for r in REGIONS if r in regions\), None\)'
+replace = '    region = None'
+
+[[rule]]
+name = "hacks pirates trained translated and arcade files are hidden unless all versions are asked for"
+file = "src/mister_mcp/versions.py"
+find = '    if version\.kind in HIDDEN_KINDS:'
+replace = '    if False:'
+
+[[rule]]
+name = "an alternate dump is hidden only when a clean one of the same title and region exists"
+file = "src/mister_mcp/versions.py"
+find = '    return version\.kind == "alternate" and'
+replace = '    return version.kind == "alternate"'
+
+[[rule]]
+name = "a clean cartridge comes before every other version whatever its region"
+file = "src/mister_mcp/versions.py"
+find = '        clean = \{None: 0, "alternate": 1\}\.get\(version\.kind, 2\)'
+replace = '        clean = 0'
+
+[[rule]]
+name = "a verified dump comes before an unmarked one"
+file = "src/mister_mcp/versions.py"
+find = '        verified = 0 if version\.verified else 1'
+replace = '        verified = 0'
+
+[[rule]]
+name = "hits come in the region order given then those with no region"
+file = "src/mister_mcp/versions.py"
+find = '        region = min\(\(rank\[r\] for r in version\.regions'
+replace = '        region = 0'
+
+[[rule]]
+name = "a search for one system asks zaparoo for that system only"
+file = "src/mister_mcp/zaparoo.py"
+find = '            params\["systems"\] = \[system\]'
+replace = '            pass'
+
+[[rule]]
+name = "a search is read five at a time from the offset"
+file = "src/mister_mcp/service.py"
+find = '        page = \[_game\(r\) for r in shown\[max\(offset, 0\)'
+replace = '        page = [_game(r) for r in shown[:MAX_RESULTS]]'
+
+[[rule]]
+name = "a launch for a region starts only that regions file"
+file = "src/mister_mcp/service.py"
+find = '    return \[r for r in results if region is None'
+replace = '    return results'
+
+[[rule]]
+name = "a plain title starts the clean cartridge in the owners region order"
+file = "src/mister_mcp/service.py"
+find = '        first\.setdefault\('
+replace = '        first[str((result.get("system") or {}).get("id", ""))] = result'
+
+[[rule]]
+name = "a region outside the four is refused before the tool runs"
+file = "src/mister_mcp/server.py"
+find = '^Region = Literal\['
+replace = 'Region = str'
+
+[[rule]]
+name = "an unknown region in the settings is refused naming the setting and the four"
+file = "src/mister_mcp/settings.py"
+find = '    if not \(isinstance\(said, list\) and said'
+replace = '        if False:'
+
+[[rule]]
+name = "an unset region order comes from the locale"
+file = "src/mister_mcp/settings.py"
+find = '    first = _first_region\(locale\)'
+replace = '    first = None'

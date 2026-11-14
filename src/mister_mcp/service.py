@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from mister_mcp.tv import TvSwitch, show_mister
+from mister_mcp.versions import FALLBACK_ORDER, REGION_SAID, chosen, version_of
 from mister_mcp.zaparoo import (
     NotAllowedError,
     Transport,
@@ -95,6 +96,8 @@ PAIR_NEEDED = (
 )
 #: The most games one answer reads out; the voice cannot list a hundred.
 MAX_RESULTS = 5
+#: The most games one search asks Zaparoo for: enough to leave hacks out and still count the rest.
+SEARCH_FETCH = 200
 
 
 def not_found(tried: tuple[str, ...]) -> str:
@@ -116,15 +119,42 @@ def _unreachable(error: UnreachableError, **fields: Any) -> dict[str, Any]:  # n
     return {"success": False, "outcome": "unreachable", "say": say, **fields}
 
 
-def _game(result: dict[str, Any]) -> dict[str, str]:
-    """A search result as the voice needs it: its name and its system's name."""
+def _game(result: dict[str, Any]) -> dict[str, Any]:
+    """A search result as the voice needs it: its name, its system's name, its region and kind."""
     system = result.get("system") or {}
-    return {"name": str(result.get("name", "")), "system": str(system.get("name") or system.get("id") or "")}
+    version = version_of(result)
+    return {
+        "name": str(result.get("name", "")),
+        "system": str(system.get("name") or system.get("id") or ""),
+        "region": version.region,
+        "kind": version.kind,
+    }
 
 
-def _listed(games: list[dict[str, str]]) -> str:
-    named = [f"{g['name']} on the {g['system']}" for g in games]
+def _named(game: dict[str, Any]) -> str:
+    """One game as said: "Tetris on the NES (Europe)", "... (Japan, alternate)"."""
+    parts = [REGION_SAID[game["region"]]] if game.get("region") else []
+    parts += [game["kind"]] if game.get("kind") else []
+    return f"{game['name']} on the {game['system']}" + (f" ({', '.join(parts)})" if parts else "")
+
+
+def _listed(games: list[dict[str, Any]]) -> str:
+    named = [_named(g) for g in games]
     return named[0] if len(named) == 1 else ", ".join(named[:-1]) + ", and " + named[-1]
+
+
+def _versions_left_out(count: int) -> str:
+    noun = "version" if count == 1 else "versions"
+    return f"left out: {count} {noun} such as hacks and translations; say all versions to hear them"
+
+
+def _page_said(shown: int, page: int, offset: int, on: str) -> str | None:
+    """Where a page sits among all the hits, when they do not fit one page."""
+    if shown <= MAX_RESULTS:
+        return None
+    if offset + page < shown:
+        return f"{page} of {shown}{on}; say more for the next five"
+    return f"the last {page} of {shown}{on}"
 
 
 def _refused(say: str, **fields: Any) -> dict[str, Any]:  # noqa: ANN401
@@ -153,6 +183,31 @@ def _which_system(said: str, fits: list[dict[str, Any]], systems: list[dict[str,
         f", and {len(names) - MAX_RESULTS} more" if len(names) > MAX_RESULTS else ""
     )
     return f"The MiSTer has no system called {said}. It has {shown}. Say one of those."
+
+
+def _in_region(results: list[dict[str, Any]], region: str | None) -> list[dict[str, Any]]:
+    """The results for `region`; every result when no region was named."""
+    # RULE: a launch for a region starts only that regions file
+    return [r for r in results if region is None or region in version_of(r).regions]
+
+
+def _one_per_system(exact: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The first of the games named exactly, on each system: the owner's preferred version of each."""
+    first: dict[str, dict[str, Any]] = {}
+    for result in exact:
+        # RULE: a plain title starts the clean cartridge in the owners region order
+        first.setdefault(str((result.get("system") or {}).get("id", "")), result)
+    return list(first.values())
+
+
+def _none_said(name: str, shown: list[dict[str, Any]], left_out: int, where: str) -> str:
+    """What the voice hears when a search has nothing to read out."""
+    if shown:
+        return f"There are no more; that was all {len(shown)}{where}."
+    if left_out:
+        only = f"The MiSTer has only hacks and other such versions of {name}{where}"
+        return f"{only}; say all versions to hear them."
+    return f"The MiSTer has no game called {name}{where}. Try fewer words, or another name."
 
 
 @dataclass(frozen=True)
@@ -194,6 +249,7 @@ class MisterService:
         tv: TvSwitch | None = None,
         clock: Callable[[], float] = time.monotonic,
         pause: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        region_order: tuple[str, ...] = FALLBACK_ORDER,
     ) -> None:
         """Reach the MiSTer through `transport`; show it on `tv` after a start, when one is set."""
         self.zaparoo = Zaparoo(transport)
@@ -201,6 +257,10 @@ class MisterService:
         self.tv = tv
         self._clock = clock
         self._pause = pause
+        #: Which region's version of a game comes first, from the owner's settings.
+        self.region_order = region_order
+        #: The start-up line saying which region order is used, and why; empty when simulated.
+        self.region_note = ""
         #: Starts waiting for the owner's yes, by token, with the time each one expires.
         self._asked: dict[str, tuple[_Start, float]] = {}
 
@@ -226,31 +286,49 @@ class MisterService:
             "game": (active or {}).get("mediaName") or None,
         }
 
-    async def search(self, name: str) -> dict[str, Any]:
-        """The games whose names hold every word of `name`, at most MAX_RESULTS of them."""
+    async def search(
+        self, name: str, system: str | None = None, offset: int = 0, *, all_versions: bool = False
+    ) -> dict[str, Any]:
+        """The games whose names hold every word of `name`, MAX_RESULTS of them from `offset`."""
         try:
-            results = await self.zaparoo.search(name, max_results=MAX_RESULTS + 1)
+            on = await self._system_named(system)
+            if isinstance(on, str):
+                return _refused(on, games=[])
+            results = await self.zaparoo.search(
+                name, max_results=SEARCH_FETCH, system=str(on["id"]) if on else None
+            )
         except UnreachableError as error:
             return _unreachable(error, games=[])
-        games = [_game(r) for r in results]
-        if not games:
+        shown, left_out = chosen(results, all_versions=all_versions, order=self.region_order)
+        where = f" on the {on['name']}" if on else ""
+        # RULE: a search is read five at a time from the offset
+        page = [_game(r) for r in shown[max(offset, 0) : max(offset, 0) + MAX_RESULTS]]
+        if not page:
             return {
                 "success": False,
                 "outcome": "not_found",
-                "say": f"The MiSTer has no game called {name}. Try fewer words, or another name.",
+                "say": _none_said(name, shown, left_out, where),
                 "games": [],
             }
-        more = len(games) > MAX_RESULTS
-        games = games[:MAX_RESULTS]
-        say = f"I found {_listed(games)}."
-        if more:
-            say += " There are more; say more of the name to narrow it down."
-        return {"success": True, "outcome": "done", "say": say, "games": games}
+        clauses = [f"I found {_listed(page)}", _page_said(len(shown), len(page), offset, where)]
+        clauses.append(_versions_left_out(left_out) if left_out else None)
+        say = ", ".join(c for c in clauses if c) + "."
+        return {"success": True, "outcome": "done", "say": say, "games": page}
 
-    async def launch(self, game: str | None = None, system: str | None = None) -> dict[str, Any]:
-        """Start a game by its name, or a system's core alone; then show the MiSTer on the TV."""
+    async def _system_named(self, system: str | None) -> dict[str, Any] | str | None:
+        """The one system `system` names; the question back when it names none or several."""
+        if not system:
+            return None
+        systems = await self.zaparoo.systems()
+        fits = _system_said(system, systems)
+        return fits[0] if len(fits) == 1 else _which_system(system, fits, systems)
+
+    async def launch(
+        self, game: str | None = None, system: str | None = None, region: str | None = None
+    ) -> dict[str, Any]:
+        """Start a game by its name, in `region` when given, or a system's core alone; then show it."""
         try:
-            start = await self._start(game, system)
+            start = await self._start(game, system, region)
             if not isinstance(start, _Start):
                 return start
             active = await self.zaparoo.active()
@@ -308,7 +386,9 @@ class MisterService:
         tv = await show_mister(self.tv)
         return started | {"say": f"{started['say']} {tv['say']}", "tv": tv}
 
-    async def _start(self, game: str | None, system: str | None) -> dict[str, Any] | _Start:
+    async def _start(
+        self, game: str | None, system: str | None, region: str | None
+    ) -> dict[str, Any] | _Start:
         systems = await self.zaparoo.systems()
         chosen: dict[str, Any] | None = None
         if system:
@@ -317,18 +397,24 @@ class MisterService:
                 return _refused(_which_system(system, fits, systems), game=None, system=None)
             chosen = fits[0]
         if game:
-            return await self._start_game(game, chosen)
+            return await self._start_game(game, chosen, region)
         if chosen is None:
             return _refused("Say a game, or a system to start with no game.", game=None, system=None)
         text = system_text(str(chosen["id"]), [str(s.get("id")) for s in systems])
         return _Start(text, None, str(chosen.get("name")))
 
-    async def _start_game(self, game: str, system: dict[str, Any] | None) -> dict[str, Any] | _Start:
-        results = await self.zaparoo.search(game, max_results=MAX_RESULTS + 1)
-        if system is not None:
-            results = [r for r in results if (r.get("system") or {}).get("id") == system.get("id")]
-        exact = [r for r in results if _plain(str(r.get("name", ""))) == _plain(game)]
-        picked = exact if len(exact) == 1 else results
+    async def _start_game(
+        self, game: str, system: dict[str, Any] | None, region: str | None
+    ) -> dict[str, Any] | _Start:
+        results = await self.zaparoo.search(
+            game, max_results=SEARCH_FETCH, system=str(system["id"]) if system else None
+        )
+        regional = _in_region(results, region)
+        if results and not regional:
+            lacks = f"The MiSTer has no {REGION_SAID[str(region)]} version of {game}"
+            say = f"{lacks}. Say another region, or none."
+            return {"success": False, "outcome": "not_found", "say": say, "game": None, "system": None}
+        picked = self._preferred(regional, game)
         if not picked:
             say = f"The MiSTer has no game called {game}. Try fewer words, or another name."
             return {"success": False, "outcome": "not_found", "say": say, "game": None, "system": None}
@@ -345,6 +431,13 @@ class MisterService:
             )
             return _refused(say, game=None, system=None)
         return _Start(text, found["name"], found["system"])
+
+    def _preferred(self, results: list[dict[str, Any]], game: str) -> list[dict[str, Any]]:
+        """The owner's preferred version of the game named exactly, one per system; else every hit."""
+        shown, _ = chosen(results, all_versions=False, order=self.region_order)
+        shown = shown or chosen(results, all_versions=True, order=self.region_order)[0]
+        exact = [r for r in shown if _plain(str(r.get("name", ""))) == _plain(game)]
+        return _one_per_system(exact) or shown
 
     async def _run(self, start: _Start, *, token: str | None) -> dict[str, Any]:
         game, system = start.game, start.system

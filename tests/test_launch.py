@@ -3,13 +3,18 @@
 
 import asyncio
 
-from mister_mcp.service import READ_BACK_GAP, READ_BACK_TRIES, MisterService
-from mister_mcp.simulator import SimulatedMister
+import pytest
+
+from mister_mcp.service import MAX_RESULTS, READ_BACK_GAP, READ_BACK_TRIES, MisterService
+from mister_mcp.simulator import SimulatedMister, release
 from mister_mcp.tv import SimulatedTvPlugin, TvSwitch
 
 
-def _launch(mister=None, tv=None, **said):
-    return asyncio.run(MisterService(mister or SimulatedMister(), tv=tv).launch(**said))
+def _launch(mister=None, tv=None, region_order=None, **said):
+    service = MisterService(
+        mister or SimulatedMister(), tv=tv, **({"region_order": region_order} if region_order else {})
+    )
+    return asyncio.run(service.launch(**said))
 
 
 def _runs(mister):
@@ -192,3 +197,73 @@ def test_a_start_shown_at_once_is_not_waited_for():
     pauses = _Pauses()
     asyncio.run(MisterService(mister, pause=pauses).launch(game="Micro Mages"))
     assert pauses.taken == []
+
+
+def _versions(*files):
+    """A MiSTer that also has these NES files."""
+    mister = SimulatedMister()
+    mister.library = [release("NES", file) for file in files]
+    return mister
+
+
+EUROPE_FIRST, USA_FIRST = ("eu", "world", "us", "jp"), ("us", "world", "eu", "jp")
+MARIO = ("Super Mario Bros (E).nes", "Super Mario Bros (E) [a1].nes", "Super Mario Bros (JU) [h1].nes")
+
+
+def test_a_launch_for_a_region_starts_only_that_regions_file():
+    mister = _versions(*MARIO, "Super Mario Bros (U).nes")
+    answer = _launch(mister, region_order=USA_FIRST, game="super mario bros", system="nes", region="eu")
+    assert _runs(mister) == ["@NES/Super Mario Bros (E)"]
+    assert answer["outcome"] == "done"
+
+
+def test_a_launch_for_one_system_finds_its_game_behind_many_on_others():
+    mister = _versions("Super Mario Bros (E).nes")
+    mister.library += [release("GBA", f"Super Mario Bros {n} (USA).gba") for n in range(MAX_RESULTS + 1)]
+    answer = _launch(mister, game="super mario bros", system="nes")
+    assert _runs(mister) == ["@NES/Super Mario Bros (E)"]
+    assert answer["outcome"] == "done"
+
+
+#: A big GoodNES-style collection's every kind of "Super Mario Bros" file, as Zaparoo lists them.
+REAL_NES_SET = (
+    "NESroms/Europe/Super Mario Bros (E).nes",
+    "NESroms/Europe/Super Mario Bros (E) [a1].nes",
+    "NESroms/PC10/Super Mario Bros (PC10).nes",
+    "NESroms/Hacks M-Z/Super Mario Bros (FDS Hack) (J).nes",
+    "NESroms/Hacks M-Z/Super Mario Bros (JU) [h1].nes",
+    "NESroms/Hacks M-Z/Super Mario Bros (JU) [h2].nes",
+    "NESroms/Hacks M-Z/Super Mario Bros (JU) (No Title Hack).nes",
+    "NESroms/Pirate/Super Mario Bros (JU) [p1].nes",
+    "NESroms/Pirate/Super Mario Bros (JU) (PRG 1) [p1].nes",
+    "NESroms/Trained Hacks/Super Mario Bros (JU) (PRG 0) [t1].nes",
+    "NESroms/Trained Hacks/Super Mario Bros (JU) [t1].nes",
+    "NESroms/Translated/Super Mario Bros (JU) (PRG 0) [T-Polish1.02].nes",
+    "NESroms/Translated/Super Mario Bros (JU) (PRG 0) [T-Port].nes",
+    "NESroms/Translated/Super Mario Bros (JU) (PRG 0) [T-Swed].nes",
+    "NESroms/Translated/Super Mario Bros (JU) (PRG 1) [T-Norwegian_Just4Fun].nes",
+    "NESroms/Translated/Super Mario Bros (JU) (PRG 1) [T-Polish1.02].nes",
+    "NESroms/Translated/Super Mario Bros (JU) (PRG 1) [T-Swed].nes",
+    "NESroms/Hacks M-Z/Super Mario Bros 1.5 (SMB1 Hack).nes",
+    "NESroms/Europe/Super Mario Bros - Duck Hunt (E).nes",
+    "NESroms/Pirate/All Night Nippon Super Mario Bros [p1].nes",
+)
+
+
+@pytest.mark.parametrize("order", [EUROPE_FIRST, USA_FIRST])
+def test_a_plain_title_starts_the_clean_cartridge_in_the_owners_region_order(order):
+    mister = _versions(*REAL_NES_SET)  # its only clean cartridge is the European one
+    answer = _launch(mister, region_order=order, game="super mario bros", system="nes")
+    assert _runs(mister) == ["@NES/Super Mario Bros (E)"]
+    assert answer["outcome"] == "done"
+    mister = _versions(*REAL_NES_SET, "NESroms/USA/Super Mario Bros (U).nes")
+    _launch(mister, region_order=order, game="super mario bros", system="nes")
+    assert _runs(mister) == ["@NES/Super Mario Bros (E)" if order[0] == "eu" else "@NES/Super Mario Bros (U)"]
+
+
+def test_a_launch_for_a_region_the_mister_lacks_says_so():
+    mister = _versions(*MARIO)
+    answer = _launch(mister, game="super mario bros", system="nes", region="world")
+    assert _runs(mister) == []
+    assert answer["outcome"] == "not_found"
+    assert "no World version" in answer["say"]

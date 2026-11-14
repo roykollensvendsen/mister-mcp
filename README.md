@@ -35,8 +35,8 @@ $ uv run mister-mcp serve --simulate < /dev/null
 | Tool | Does | Changes anything |
 |---|---|---|
 | `mister_status` | Whether the MiSTer is on, and the system and game it runs | No |
-| `mister_search` | Up to five games whose names hold every word said, with their systems | No |
-| `mister_launch` | Starts a game by name, or a system's core alone, reads back what runs, then shows it on the TV if that TV is already on. While a game runs, it asks first | Starts a game |
+| `mister_search` | Five games at a time whose names hold every word said, on one system when one is named, each with its region; hacks and other such versions only when all versions are asked for | No |
+| `mister_launch` | Starts a game by name, in a region when one is named and otherwise the clean cartridge in the owner's region order, or a system's core alone; reads back what runs, then shows it on the TV if that TV is already on. While a game runs, it asks first | Starts a game |
 | `mister_launch_confirm` | The owner's yes to that question, with its one-time token: ends the running game and starts the one asked for | Starts a game |
 | `mister_update_request` | Checks that update_all may run (512 MB free, none running, the MiSTer up two minutes) and asks, naming a running game | No |
 | `mister_update_confirm` | The owner's yes, with its one-time token: starts update_all, which may restart the MiSTer | Updates the MiSTer |
@@ -74,6 +74,30 @@ The name is tried first, then each spare. Together they take at most six
 seconds, so the voice still gets its answer in time. After that, the address
 that answered is asked first. `mister_status` says which address it used.
 When none of them answers, the voice names each one and says what to check.
+
+When a game exists in several versions, the voice hears the clean cartridge
+first, then the others, in the owner's region order:
+
+<!-- not run: a settings file, not a command -->
+```toml
+[search]
+region_order = ["eu", "world", "us", "jp"]   # any of the four, first the one wanted most
+```
+
+A region the list leaves out comes after it, in the order world, USA, Europe,
+Japan. Anything but those four refuses to start, naming the setting. Hacks,
+pirate and trained copies, translations, PlayChoice-10 arcade versions, and an
+alternate dump beside a clean one, are heard only when the owner asks for all
+versions. They are read from the file name as No-Intro and GoodTools write it
+(`(Europe)`, `(USA, Europe)`, `(E)`, `(JU)`, `[a1]`, `[h1]`, `[T+Eng]`, `[!]`).
+
+Without `region_order`, the order comes from the locale (`LC_ALL`, then
+`LANG`): a European country, `nb_NO` among them, puts Europe first, `en_US`
+the USA, `ja_JP` Japan. The claude-voice bridge starts plugins without a
+locale, so under it an unset order is world, USA, Europe, Japan. Set
+`region_order` to have it otherwise. The server says which order it uses when
+it starts, for example `region_order unset and no locale given: using world,
+us, eu, jp`.
 
 To have the TV the MiSTer is plugged into show it after a start, add the
 TV plugin ([tv-mcp](https://github.com/roykollensvendsen/tv-mcp)) and the
