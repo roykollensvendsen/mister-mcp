@@ -30,7 +30,7 @@ from mister_mcp.pairing import (
     pairing_hmac,
 )
 from mister_mcp.ssh import ALLOWED_COMMANDS, SSH_FAILED, NotAllowedCommandError, Reply
-from mister_mcp.zaparoo import UnreachableError, ZaparooNotRunningError
+from mister_mcp.zaparoo import ZAPAROO_MAX_RESULTS, UnreachableError, ZaparooNotRunningError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -72,6 +72,10 @@ def release(system: str, file: str) -> dict[str, Any]:
         "zapScript": f"@{system}/{stem}",
         "system": {"id": system, "name": SYSTEMS.get(system, system)},
     }
+
+
+#: JSON-RPC's code for parameters a method refuses, as Core answers a search for too many results.
+INVALID_PARAMS = -32602
 
 
 class SimulatedMister:
@@ -117,16 +121,22 @@ class SimulatedMister:
             systems = [{"id": key, "name": name} for key, name in SYSTEMS.items()]
             return answer | {"result": {"systems": systems}}
         if method == "media.search":
-            found = self._search(params)
-            if self.extra_result and all(
-                w in self.extra_result["name"].casefold()
-                for w in str(params.get("query", "")).casefold().split()
-            ):
-                found.append(self.extra_result)
-            return answer | {"result": {"results": found}}
+            return answer | self._answer_search(params)
         if method == "run":
             return answer | self._run(str(params.get("text", "")))
         return answer | {"error": {"code": -32601, "message": "method not found"}}
+
+    def _answer_search(self, params: dict[str, Any]) -> dict[str, Any]:
+        """Zaparoo's answer to media.search: its results, or its refusal of too many."""
+        # RULE: more than zaparoos thousand results is refused as core does
+        if int(params.get("maxResults", 0)) > ZAPAROO_MAX_RESULTS:
+            return {"error": {"code": INVALID_PARAMS, "message": "invalid params"}}
+        found = self._search(params)
+        if self.extra_result and all(
+            w in self.extra_result["name"].casefold() for w in str(params.get("query", "")).casefold().split()
+        ):
+            found.append(self.extra_result)
+        return {"result": {"results": found}}
 
     def _shown(self) -> dict[str, Any] | None:
         """What media.active reports: what ran before a start, while the new game still loads."""

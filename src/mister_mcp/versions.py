@@ -123,7 +123,7 @@ def chosen(
         version = version_of(result)
         # RULE: a clean cartridge comes before every other version whatever its region
         clean = {None: 0, "alternate": 1}.get(version.kind, 2)
-        # RULE: a verified dump comes before an unmarked one
+        # RULE: a verified dump comes before an unmarked one in the same region
         verified = 0 if version.verified else 1
         # RULE: hits come in the region order given then those with no region
         region = min((rank[r] for r in version.regions if r in rank), default=len(rank))

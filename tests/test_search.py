@@ -4,7 +4,8 @@
 import asyncio
 
 from mister_mcp.service import MAX_RESULTS, SEARCH_FETCH, MisterService
-from mister_mcp.simulator import SimulatedMister, release
+from mister_mcp.simulator import INVALID_PARAMS, SimulatedMister, release
+from mister_mcp.zaparoo import ZAPAROO_MAX_RESULTS
 
 
 def _search(name, mister=None, **said):
@@ -110,3 +111,24 @@ def test_a_name_found_only_as_hidden_versions_says_how_to_hear_them():
 def test_a_search_of_a_mister_that_does_not_answer_says_so():
     answer = _search("tanglewood", SimulatedMister(on=False))
     assert answer["outcome"] == "unreachable"
+
+
+def test_a_search_asks_for_no_more_than_zaparoo_allows():
+    assert 0 < SEARCH_FETCH <= ZAPAROO_MAX_RESULTS
+
+
+def test_more_than_zaparoos_thousand_results_is_refused_as_core_does():
+    mister = SimulatedMister()
+
+    def ask(most):
+        request = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "media.search",
+            "params": {"query": "o", "maxResults": most},
+        }
+        return asyncio.run(mister.send(request, wait=1.0))
+
+    assert "result" in ask(ZAPAROO_MAX_RESULTS)
+    beyond = ask(ZAPAROO_MAX_RESULTS + 1)
+    assert beyond["error"]["code"] == INVALID_PARAMS

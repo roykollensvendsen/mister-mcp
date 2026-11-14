@@ -267,3 +267,27 @@ def test_a_launch_for_a_region_the_mister_lacks_says_so():
     assert _runs(mister) == []
     assert answer["outcome"] == "not_found"
     assert "no World version" in answer["say"]
+
+
+@pytest.mark.parametrize(
+    ("file", "said", "region"),
+    [
+        ("NESroms/Hacks M-Z/Super Mario Bros 1.5 (SMB1 Hack).nes", "(hack)", None),
+        ("NESroms/Hacks M-Z/Super Mario Bros 1.5 (E) [h1].nes", "(Europe, hack)", None),
+        ("NESroms/Europe/Super Mario Bros 1.5 (E).nes", "(Europe)", "eu"),
+    ],
+)
+def test_a_start_names_the_version_it_started(file, said, region):
+    mister = _versions(file)
+    answer = _launch(mister, game="super mario bros 1.5", system="nes", region=region)
+    assert answer["outcome"] == "done"
+    assert answer["say"].startswith(
+        f"Started. The MiSTer is playing Super Mario Bros 1.5 on the Nintendo Entertainment System {said}."
+    )
+
+
+def test_a_clean_cartridge_with_no_region_is_started_with_no_version_said():
+    answer = _launch(game="micro mages")
+    assert answer["say"].startswith(
+        "Started. The MiSTer is playing Micro Mages on the Nintendo Entertainment System."
+    )
