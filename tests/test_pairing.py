@@ -318,11 +318,12 @@ def test_a_pin_older_than_five_minutes_is_refused():
 
 def test_a_pin_still_within_its_five_minutes_and_three_tries_pairs():
     clock = Clock()
+    shown = clock.now
     zaparoo = SimulatedPairing(clock)
     for _ in range(PIN_TRIES - 1):
         with pytest.raises(PairingError, match="did not accept that PIN"):
             _try("123456", zaparoo, clock)
-    clock.now = 1000.0 + PIN_LIFETIME - 1 - ZAPAROO_PAIR_INTERVAL
+    clock.now = shown + PIN_LIFETIME - 1 - ZAPAROO_PAIR_INTERVAL
     assert _try(SimulatedPairing.PIN, zaparoo, clock).auth_token == "simulated"  # noqa: S105
 
 
