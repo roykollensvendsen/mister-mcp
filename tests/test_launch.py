@@ -299,3 +299,23 @@ def test_the_question_before_ending_a_game_names_the_version_it_would_start():
     answer = _launch(mister, game="super mario bros 1.5", system="nes")
     assert answer["outcome"] == "ask"
     assert answer["say"].endswith("Do you want me to end it and start Super Mario Bros 1.5 (Europe, hack)?")
+
+
+@pytest.mark.parametrize("region", ["eu", "us", None])
+def test_a_plain_sonic_on_the_genesis_starts_the_cartridge_not_the_collection_copy(region):
+    mister = SimulatedMister()
+    mister.library = [
+        release("Genesis", "Sonic The Hedgehog (USA, Europe) (Sonic Classic Collection).md"),
+        release("Genesis", "Sonic The Hedgehog (USA, Europe).md"),
+    ]
+    answer = _launch(mister, game="sonic the hedgehog", system="genesis", region=region)
+    assert _runs(mister) == ["@Genesis/Sonic The Hedgehog (USA, Europe)"]
+    assert answer["outcome"] == "done"
+
+
+def test_a_game_there_only_as_a_re_release_still_starts_and_says_so():
+    mister = SimulatedMister()
+    mister.library = [release("Genesis", "Sonic The Hedgehog (USA, Europe) (Sonic Classic Collection).md")]
+    answer = _launch(mister, game="sonic the hedgehog", system="genesis")
+    assert answer["outcome"] == "done"
+    assert "Sonic The Hedgehog on the Sega Genesis (Europe, re-release)." in answer["say"]
