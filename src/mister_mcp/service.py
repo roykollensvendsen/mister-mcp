@@ -226,6 +226,7 @@ class _Start:
     version: str = ""
 
     def named(self) -> str:
+        # RULE: the question before ending a game names the version it would start
         return f"{self.game}{self.version}" if self.game else f"the {self.system} core"
 
 

@@ -132,3 +132,9 @@ def test_more_than_zaparoos_thousand_results_is_refused_as_core_does():
     assert "result" in ask(ZAPAROO_MAX_RESULTS)
     beyond = ask(ZAPAROO_MAX_RESULTS + 1)
     assert beyond["error"]["code"] == INVALID_PARAMS
+
+
+def test_a_search_for_no_results_at_all_is_refused_as_core_does():
+    mister = SimulatedMister()
+    request = {"jsonrpc": "2.0", "id": 1, "method": "media.search", "params": {"query": "o", "maxResults": 0}}
+    assert asyncio.run(mister.send(request, wait=1.0))["error"]["code"] == INVALID_PARAMS
