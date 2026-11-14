@@ -291,3 +291,11 @@ def test_a_clean_cartridge_with_no_region_is_started_with_no_version_said():
     assert answer["say"].startswith(
         "Started. The MiSTer is playing Micro Mages on the Nintendo Entertainment System."
     )
+
+
+def test_the_question_before_ending_a_game_names_the_version_it_would_start():
+    mister = _versions("NESroms/Hacks M-Z/Super Mario Bros 1.5 (E) [h1].nes")
+    mister.play("NES", "Micro Mages")
+    answer = _launch(mister, game="super mario bros 1.5", system="nes")
+    assert answer["outcome"] == "ask"
+    assert answer["say"].endswith("Do you want me to end it and start Super Mario Bros 1.5 (Europe, hack)?")

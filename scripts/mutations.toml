@@ -396,11 +396,23 @@ replace = '    first = None'
 [[rule]]
 name = "more than zaparoos thousand results is refused as core does"
 file = "src/mister_mcp/simulator.py"
-find = '        if int\(params\.get\("maxResults", 0\)\) > ZAPAROO_MAX_RESULTS:'
-replace = '        if False:'
+find = '        if not 0 < int\(params\.get\("maxResults", 0\)\) <= ZAPAROO_MAX_RESULTS:'
+replace = '        if not 0 < int(params.get("maxResults", 0)):'
 
 [[rule]]
 name = "a start names the version it started"
 file = "src/mister_mcp/service.py"
 find = '            say = f"Started\. The MiSTer is \{describe\(active\)\}\{start\.version\}\."'
 replace = '            say = f"Started. The MiSTer is {describe(active)}."'
+
+[[rule]]
+name = "a search for no results at all is refused as core does"
+file = "src/mister_mcp/simulator.py"
+find = '        if not 0 < int\(params\.get\("maxResults", 0\)\) <= ZAPAROO_MAX_RESULTS:'
+replace = '        if int(params.get("maxResults", 0)) > ZAPAROO_MAX_RESULTS:'
+
+[[rule]]
+name = "the question before ending a game names the version it would start"
+file = "src/mister_mcp/service.py"
+find = '        return f"\{self\.game\}\{self\.version\}" if self\.game else'
+replace = '        return self.game or f"the {self.system} core"'

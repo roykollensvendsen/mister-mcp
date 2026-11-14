@@ -129,7 +129,8 @@ class SimulatedMister:
     def _answer_search(self, params: dict[str, Any]) -> dict[str, Any]:
         """Zaparoo's answer to media.search: its results, or its refusal of too many."""
         # RULE: more than zaparoos thousand results is refused as core does
-        if int(params.get("maxResults", 0)) > ZAPAROO_MAX_RESULTS:
+        # RULE: a search for no results at all is refused as core does
+        if not 0 < int(params.get("maxResults", 0)) <= ZAPAROO_MAX_RESULTS:
             return {"error": {"code": INVALID_PARAMS, "message": "invalid params"}}
         found = self._search(params)
         if self.extra_result and all(
