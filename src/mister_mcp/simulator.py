@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import re
 import secrets
 import time
 from typing import TYPE_CHECKING, Any
@@ -61,6 +62,18 @@ def _game(system: str, name: str) -> dict[str, Any]:
     }
 
 
+def release(system: str, file: str) -> dict[str, Any]:
+    """A search result for `file`, which may sit in folders, as Zaparoo lists one: named by its title."""
+    stem = file.rsplit("/", 1)[-1].rsplit(".", 1)[0]
+    title = " ".join(re.sub(r"\([^)]*\)|\[[^\]]*\]", " ", stem).split())
+    return {
+        "name": title,
+        "path": f"/media/fat/games/{system}/{file}",
+        "zapScript": f"@{system}/{stem}",
+        "system": {"id": system, "name": SYSTEMS.get(system, system)},
+    }
+
+
 class SimulatedMister:
     """A transport that is the MiSTer: Zaparoo's answers, without a network."""
 
@@ -71,6 +84,7 @@ class SimulatedMister:
         self.sent: list[dict[str, Any]] = []
         #: A further search result, as a test wants Zaparoo to have returned it.
         self.extra_result: dict[str, Any] | None = None
+        self.library: list[dict[str, Any]] = []
         #: When set, a start is acknowledged but the MiSTer keeps showing what it showed.
         self.ignores_runs = False
         #: When set, every start is refused with this (message, category), as Zaparoo would.
@@ -130,16 +144,24 @@ class SimulatedMister:
             msg = "the simulated MiSTer is on, but Zaparoo is not running on it"
             raise ZaparooNotRunningError(msg, tried=[ADDRESS])
 
-    @staticmethod
-    def _search(params: dict[str, Any]) -> list[dict[str, Any]]:
+    def _search(self, params: dict[str, Any]) -> list[dict[str, Any]]:
+        """Zaparoo's media.search: every word in the name, on the systems asked for, if any."""
         words = str(params.get("query", "")).casefold().split()
+        systems = params.get("systems") or None
+        every = [_game(system, name) for system, names in GAMES.items() for name in names] + self.library
         found = [
-            _game(system, name)
-            for system, names in GAMES.items()
-            for name in names
-            if all(word in name.casefold() for word in words)
+            game
+            for game in every
+            if all(word in game["name"].casefold() for word in words)
+            and (systems is None or game["system"]["id"] in systems)
         ]
         return found[: int(params.get("maxResults", 100))]
+
+    def _named(self, text: str, system: str, name: str) -> str | None:
+        """The game a launch text starts: a homebrew game by its name, or a library file by its text."""
+        if name in GAMES.get(system, ()):
+            return name
+        return next((g["name"] for g in self.library if g["zapScript"] == text), None)
 
     def _run(self, text: str) -> dict[str, Any]:
         if self.run_error:
@@ -157,8 +179,9 @@ class SimulatedMister:
                 return {"result": None}
         elif text.startswith("@") and "/" in text:
             system, name = text[1:].split("/", 1)
-            if name in GAMES.get(system, ()):
-                self.play(system, name)
+            found = self._named(text, system, name)
+            if found:
+                self.play(system, found)
                 return {"result": None}
         return {"error": {"code": 1, "message": "media not found", "data": {"category": "media_not_found"}}}
 

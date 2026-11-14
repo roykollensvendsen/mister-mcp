@@ -175,9 +175,15 @@ class Zaparoo:
         result = await self.call("systems")
         return list((result or {}).get("systems", []))
 
-    async def search(self, query: str, *, max_results: int) -> list[dict[str, Any]]:
-        """The indexed games whose names hold every word of `query`."""
-        result = await self.call("media.search", {"query": query, "maxResults": max_results})
+    async def search(
+        self, query: str, *, max_results: int, system: str | None = None
+    ) -> list[dict[str, Any]]:
+        """The indexed games whose names hold every word of `query`, on `system` alone when given."""
+        params: dict[str, Any] = {"query": query, "maxResults": max_results}
+        # RULE: a search for one system asks zaparoo for that system only
+        if system:
+            params["systems"] = [system]
+        result = await self.call("media.search", params)
         return list((result or {}).get("results", []))
 
     async def run(self, text: str) -> None:

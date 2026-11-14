@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
@@ -50,6 +50,11 @@ BROKE = (
     "That went wrong inside mister-mcp. Try again. "
     f"If it fails again, run {MISTER_STATUS} in a terminal to see what is wrong."
 )
+
+#: The regions a game can be started in. A choice, never free text: the launch text is always the
+#: search result's own, and the region only picks which result.
+# RULE: a region outside the four is refused before the tool runs
+Region = Literal["eu", "us", "jp", "world"]
 
 READ_ONLY = ToolAnnotations(read_only_hint=True)
 CHANGES = ToolAnnotations(read_only_hint=False)
@@ -123,10 +128,21 @@ def build_server(
 
     @guarded.tool(
         annotations=READ_ONLY,
-        description="Find a game by its name.\nName: words from the game's title, as the owner said them.",
+        description=(
+            "Find a game by its name.\nName: words from the game's title, as the owner said them."
+            " System: only that system's games, when the owner names one. Five hits an answer, the"
+            " clean cartridge first in the owner's region order. Offset: hits already read; 5 for the"
+            " next five when the owner says more. All_versions: true when the owner asks for all"
+            " versions, with hacks, translations and the like."
+        ),
     )
-    async def mister_search(name: str) -> dict[str, Any]:
-        return await service.search(name)
+    async def mister_search(
+        name: str,
+        system: str | None = None,
+        offset: int = 0,
+        all_versions: bool = False,  # noqa: FBT001, FBT002
+    ) -> dict[str, Any]:
+        return await service.search(name, system, offset, all_versions=all_versions)
 
     # RULE: a slow launch is never asked for again
     @guarded.tool(
@@ -134,11 +150,15 @@ def build_server(
         annotations=CHANGES,
         description=(
             "Start a game or a core.\nGame: words of its title. System: its name, alone to start its core"
-            " with no game. Then the TV it is plugged into shows it, only if that TV is already on."
+            " with no game. Region: eu, us, jp or world, only when the owner names one; otherwise the"
+            " clean cartridge in the owner's region order. Then the TV it is plugged into shows it,"
+            " only if that TV is already on."
         ),
     )
-    async def mister_launch(game: str | None = None, system: str | None = None) -> dict[str, Any]:
-        return await service.launch(game=game, system=system)
+    async def mister_launch(
+        game: str | None = None, system: str | None = None, region: Region | None = None
+    ) -> dict[str, Any]:
+        return await service.launch(game=game, system=system, region=region)
 
     @guarded.tool(
         working=LAUNCH_WORKING,

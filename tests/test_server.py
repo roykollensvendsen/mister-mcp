@@ -4,6 +4,8 @@
 import asyncio
 import re
 
+import pytest
+
 from mister_mcp import ssh, tv, zaparoo
 from mister_mcp.server import ANSWER_WITHIN, UPDATE_WORKING, build_server
 from mister_mcp.service import MisterService
@@ -146,4 +148,24 @@ def test_mister_launch_starts_the_game_and_says_so():
 
 def test_mister_search_names_the_games_it_found():
     answer = _call(_server(), "mister_search", {"name": "tanglewood"})
-    assert answer["games"] == [{"name": "Tanglewood", "system": "Sega Genesis"}]
+    assert answer["games"] == [{"name": "Tanglewood", "system": "Sega Genesis", "region": None, "kind": None}]
+
+
+def test_a_region_outside_the_four_is_refused_before_the_tool_runs():
+    mister = SimulatedMister()
+    server = _server(mister)
+    region = _tools(server)["mister_launch"].input_schema["properties"]["region"]
+    assert [choice.get("enum") for choice in region["anyOf"] if "enum" in choice] == [
+        ["eu", "us", "jp", "world"]
+    ]
+    for said in ("eu) (foo", "europe"):
+        with pytest.raises(Exception, match="'eu', 'us', 'jp' or 'world'"):
+            asyncio.run(server.call_tool("mister_launch", {"game": "micro mages", "region": said}))
+    assert not [r for r in mister.sent if r["method"] == "run"]
+
+
+def test_the_search_tool_takes_a_system_an_offset_and_all_versions():
+    schema = _tools(_server())["mister_search"].input_schema["properties"]
+    assert set(schema) == {"name", "system", "offset", "all_versions"}
+    answer = _call(_server(), "mister_search", {"name": "o", "offset": 5})
+    assert answer["success"] is True
