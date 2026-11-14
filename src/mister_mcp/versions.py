@@ -7,9 +7,10 @@
     Super Mario Bros (PC10).nes         the PlayChoice-10 arcade version, no region
 
 The voice hears the clean cartridge first, in the owner's region order. Hacks,
-pirates, trained and translated files, arcade versions, and an alternate dump
-of a title and region that also has a clean one, are left out unless the owner
-asks for all versions.
+pirates, trained and translated files and arcade versions are left out unless
+the owner asks for all versions. So are an alternate dump, a bad dump and a
+re-release (a collection, Sega Channel, Virtual Console...) of a title whose
+cartridge is there for the same regions; when they are all there is, they stay.
 """
 
 from __future__ import annotations
@@ -28,6 +29,9 @@ REGION_SAID = {"eu": "Europe", "world": "World", "us": "USA", "jp": "Japan"}
 #: The kinds of version left out unless the owner asks for all versions. An alternate
 #: dump is left out too, but only beside a clean one of its title and region.
 HIDDEN_KINDS = frozenset({"hack", "pirate", "trained", "translated", "arcade"})
+#: The kinds left out only beside the cartridge itself, a clean copy of the same title
+#: for the same regions: an alternate dump, a bad dump, and a re-release in a collection.
+BESIDE_CLEAN_KINDS = frozenset({"alternate", "bad dump", "re-release"})
 
 #: A region as No-Intro spells it out, inside "(...)", one of a comma-separated list.
 _NO_INTRO = {"europe": "eu", "world": "world", "usa": "us", "japan": "jp"}
@@ -42,6 +46,11 @@ _MARKS = (
     (re.compile(r"p\d*"), "pirate"),
     (re.compile(r"t\d*"), "trained"),
     (re.compile(r"a\d*"), "alternate"),
+    (re.compile(r"b\d*"), "bad dump"),
+)
+#: No-Intro's groups for a game sold again later, in a collection or on a service.
+_RE_RELEASE = re.compile(
+    r".* Collection|Sega Channel|Virtual Console|Switch Online|Sega Ages.*|.* Mini|Steam|GameTap|Wii"
 )
 
 
@@ -53,7 +62,8 @@ class Version:
     region: str | None
     #: Every region it names: "(USA, Europe)" is for both.
     regions: frozenset[str]
-    #: hack, pirate, trained, translated, arcade or alternate; None for a clean cartridge.
+    #: hack, pirate, trained, translated, arcade, alternate, bad dump or re-release;
+    #: None for a clean cartridge.
     kind: str | None
     #: Whether GoodTools marked it [!], a dump checked against the cartridge.
     verified: bool
@@ -72,6 +82,8 @@ def _paren_kind(text: str) -> str | None:
     """The kind one "(...)" says: the PlayChoice-10 arcade version, or a named hack."""
     if text == "PC10":
         return "arcade"
+    if _RE_RELEASE.fullmatch(text):
+        return "re-release"
     return "hack" if text.endswith("Hack") else None
 
 
@@ -80,11 +92,21 @@ def _bracket_kind(text: str) -> str | None:
     return next((kind for pattern, kind in _MARKS if pattern.fullmatch(text)), None)
 
 
+def _tag_kinds(result: dict[str, Any]) -> list[str]:
+    """The kinds Zaparoo's own tags say: a distribution, or a credit to a collection."""
+    tags = [(str(t.get("type")), str(t.get("tag"))) for t in result.get("tags") or []]
+    # RULE: a re release is read from zaparoos tags first
+    said = any(
+        kind == "distribution" or (kind == "credit" and tag.endswith("-collection")) for kind, tag in tags
+    )
+    return ["re-release"] if said else []
+
+
 def version_of(result: dict[str, Any]) -> Version:
     """The version a search result is, from its file's name."""
     stem = pathlib.PurePosixPath(str(result.get("path", ""))).stem
     regions: set[str] = set()
-    kinds: list[str] = []
+    kinds = _tag_kinds(result)
     for paren, bracket in _GROUP.findall(stem):
         regions |= _regions(paren)
         kinds += [k for k in (_paren_kind(paren), _bracket_kind(bracket)) if k]
@@ -99,13 +121,23 @@ def _system(result: dict[str, Any]) -> str:
     return str((result.get("system") or {}).get("id", ""))
 
 
-def _hidden(result: dict[str, Any], clean: set[tuple[str, str, str | None]]) -> bool:
+_Twin = tuple[str, str, frozenset[str]]
+
+
+def _twin(result: dict[str, Any], version: Version) -> _Twin:
+    """What a copy must share with the cartridge to stand for it: its system, title and regions."""
+    return _system(result), version.title, version.regions
+
+
+def _hidden(result: dict[str, Any], clean: set[_Twin]) -> bool:
     version = version_of(result)
     # RULE: hacks pirates trained translated and arcade files are hidden unless all versions are asked for
     if version.kind in HIDDEN_KINDS:
         return True
     # RULE: an alternate dump is hidden only when a clean one of the same title and region exists
-    return version.kind == "alternate" and (_system(result), version.title, version.region) in clean
+    # RULE: a re release is hidden when the cartridge itself is there
+    # RULE: a bad dump is hidden when a good copy of the same title and region exists
+    return version.kind in BESIDE_CLEAN_KINDS and _twin(result, version) in clean
 
 
 def chosen(
@@ -115,7 +147,7 @@ def chosen(
     shown = results
     if not all_versions:
         versions = [(r, version_of(r)) for r in results]
-        clean = {(_system(r), v.title, v.region) for r, v in versions if v.kind is None}
+        clean = {_twin(r, v) for r, v in versions if v.kind is None}
         shown = [r for r in results if not _hidden(r, clean)]
     rank = {region: place for place, region in enumerate(order)}
 

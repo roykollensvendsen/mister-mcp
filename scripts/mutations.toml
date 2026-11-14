@@ -330,8 +330,8 @@ replace = '    if False:'
 [[rule]]
 name = "an alternate dump is hidden only when a clean one of the same title and region exists"
 file = "src/mister_mcp/versions.py"
-find = '    return version\.kind == "alternate" and'
-replace = '    return version.kind == "alternate"'
+find = '    return version\.kind in BESIDE_CLEAN_KINDS and _twin'
+replace = '    return version.kind in BESIDE_CLEAN_KINDS - {"alternate"} and _twin(result, version) in clean or version.kind == "alternate"'
 
 [[rule]]
 name = "a clean cartridge comes before every other version whatever its region"
@@ -416,3 +416,21 @@ name = "the question before ending a game names the version it would start"
 file = "src/mister_mcp/service.py"
 find = '        return f"\{self\.game\}\{self\.version\}" if self\.game else'
 replace = '        return self.game or f"the {self.system} core"'
+
+[[rule]]
+name = "a re release is hidden when the cartridge itself is there"
+file = "src/mister_mcp/versions.py"
+find = '    return version\.kind in BESIDE_CLEAN_KINDS and _twin'
+replace = '    return version.kind in BESIDE_CLEAN_KINDS - {"re-release"} and _twin(result, version) in clean'
+
+[[rule]]
+name = "a bad dump is hidden when a good copy of the same title and region exists"
+file = "src/mister_mcp/versions.py"
+find = '    return version\.kind in BESIDE_CLEAN_KINDS and _twin'
+replace = '    return version.kind in BESIDE_CLEAN_KINDS - {"bad dump"} and _twin(result, version) in clean'
+
+[[rule]]
+name = "a re release is read from zaparoos tags first"
+file = "src/mister_mcp/versions.py"
+find = '    said = any\('
+replace = '    said = False and any('

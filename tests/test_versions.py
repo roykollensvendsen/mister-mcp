@@ -114,3 +114,81 @@ def test_a_clean_cartridge_comes_before_every_other_version_whatever_its_region(
     shown, _ = chosen([*(_hit(f) for f in files), clean], all_versions=True, order=order)
     assert shown[0] == clean
     assert version_of(shown[1]).kind == "alternate"
+
+
+SONIC = "Sonic The Hedgehog (USA, Europe).md"
+SONIC_COLLECTION = "Sonic The Hedgehog (USA, Europe) (Sonic Classic Collection).md"
+
+
+@pytest.mark.parametrize(
+    "file",
+    [
+        SONIC_COLLECTION,
+        "Sonic The Hedgehog 3 (USA) (1993-11-20) (Sega Channel).md",
+        "Sonic The Hedgehog 2 (USA, Europe) (Rev A) (Virtual Console).md",
+        "Gunstar Heroes (Japan) (Switch Online).md",
+        "Streets of Rage (Europe) (Sega Ages).md",
+        "Alien Soldier (Europe) (Mega Drive Mini).md",
+        "Ecco the Dolphin (USA) (Steam).md",
+    ],
+)
+def test_a_re_release_is_read_from_its_name_when_zaparoo_gives_no_tag(file):
+    assert version_of(_hit(file, "Genesis", "x")).kind == "re-release"
+
+
+def test_a_re_release_is_read_from_zaparoos_tags_first():
+    tagged = _hit("Sonic Spinball (USA).md", "Genesis") | {
+        "tags": [{"type": "distribution", "tag": "sega-channel"}]
+    }
+    collected = _hit("Sonic CD (USA).md", "Genesis") | {
+        "tags": [{"type": "credit", "tag": "gems-collection"}]
+    }
+    maker = _hit("Sonic 2 (USA).md", "Genesis") | {
+        "tags": [{"type": "credit", "tag": "sega-technical-institute"}]
+    }
+    assert [version_of(r).kind for r in (tagged, collected, maker)] == ["re-release", "re-release", None]
+
+
+def test_a_bad_dump_is_read_from_goodtools_mark():
+    assert version_of(_hit("Super Mario Bros (E) [b1].nes")).kind == "bad dump"
+
+
+def _shown(*files, system="Genesis"):
+    shown, _ = chosen([_hit(f, system) for f in files], all_versions=False, order=EUROPE_FIRST)
+    return [r["path"].rsplit("/", 1)[-1] for r in shown]
+
+
+@pytest.mark.parametrize(
+    ("files", "kept"),
+    [
+        ((SONIC_COLLECTION, SONIC), [SONIC]),
+        ((SONIC_COLLECTION,), [SONIC_COLLECTION]),
+        (
+            ("Sonic The Hedgehog 3 (USA) (1993-11-20) (Sega Channel).md", "Sonic The Hedgehog 3 (USA).md"),
+            ["Sonic The Hedgehog 3 (USA).md"],
+        ),
+        (
+            ("Sonic The Hedgehog (USA).md", "Sonic The Hedgehog (Japan) (Virtual Console).md"),
+            ["Sonic The Hedgehog (USA).md", "Sonic The Hedgehog (Japan) (Virtual Console).md"],
+        ),
+    ],
+)
+def test_a_re_release_is_hidden_when_the_cartridge_itself_is_there(files, kept):
+    assert _shown(*files) == kept
+
+
+@pytest.mark.parametrize(
+    ("files", "kept"),
+    [
+        (("Super Mario Bros (E) [b1].nes", "Super Mario Bros (E).nes"), ["Super Mario Bros (E).nes"]),
+        (("Super Mario Bros (E) [b1].nes",), ["Super Mario Bros (E) [b1].nes"]),
+    ],
+)
+def test_a_bad_dump_is_hidden_when_a_good_copy_of_the_same_title_and_region_exists(files, kept):
+    assert _shown(*files, system="NES") == kept
+
+
+def test_all_versions_lists_re_releases_and_bad_dumps_too():
+    files = (SONIC, SONIC_COLLECTION)
+    shown, left_out = chosen([_hit(f, "Genesis") for f in files], all_versions=True, order=EUROPE_FIRST)
+    assert (len(shown), left_out) == (2, 0)
