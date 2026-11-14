@@ -131,11 +131,16 @@ def _game(result: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _named(game: dict[str, Any]) -> str:
-    """One game as said: "Tetris on the NES (Europe)", "... (Japan, alternate)"."""
+def _version_said(game: dict[str, Any]) -> str:
+    """A game's version as said after it: " (Europe)", " (Japan, alternate)", or nothing."""
     parts = [REGION_SAID[game["region"]]] if game.get("region") else []
     parts += [game["kind"]] if game.get("kind") else []
-    return f"{game['name']} on the {game['system']}" + (f" ({', '.join(parts)})" if parts else "")
+    return f" ({', '.join(parts)})" if parts else ""
+
+
+def _named(game: dict[str, Any]) -> str:
+    """One game as said: "Tetris on the NES (Europe)", "... (Japan, alternate)"."""
+    return f"{game['name']} on the {game['system']}{_version_said(game)}"
 
 
 def _listed(games: list[dict[str, Any]]) -> str:
@@ -217,9 +222,11 @@ class _Start:
     text: str
     game: str | None
     system: str | None
+    #: The version said after the game, as a search hit says it: " (Europe, hack)", or "".
+    version: str = ""
 
     def named(self) -> str:
-        return self.game or f"the {self.system} core"
+        return f"{self.game}{self.version}" if self.game else f"the {self.system} core"
 
 
 def _shows(active: dict[str, Any] | None, start: _Start) -> bool:
@@ -430,7 +437,7 @@ class MisterService:
                 "Start it from the MiSTer's own menu."
             )
             return _refused(say, game=None, system=None)
-        return _Start(text, found["name"], found["system"])
+        return _Start(text, found["name"], found["system"], _version_said(found))
 
     def _preferred(self, results: list[dict[str, Any]], game: str) -> list[dict[str, Any]]:
         """The owner's preferred version of the game named exactly, one per system; else every hit."""
@@ -462,7 +469,8 @@ class MisterService:
         active = await self._read_back(start)
         shows = (active or {}).get("mediaName") or None
         if _shows(active, start):
-            say = f"Started. The MiSTer is {describe(active)}."
+            # RULE: a start names the version it started
+            say = f"Started. The MiSTer is {describe(active)}{start.version}."
             return {"success": True, "outcome": "done", "say": say, "game": game, "system": system}
         say = (
             f"I sent the start, but the MiSTer is {describe(active)}. "

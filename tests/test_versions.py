@@ -101,7 +101,7 @@ def test_hits_come_in_the_region_order_given_then_those_with_no_region(order):
     assert [version_of(h).region for h in shown] == [*order, None]
 
 
-def test_a_verified_dump_comes_before_an_unmarked_one():
+def test_a_verified_dump_comes_before_an_unmarked_one_in_the_same_region():
     unmarked, verified = _hit("Tetris (Europe).nes"), _hit("Tetris (Europe) [!].nes")
     shown, _ = chosen([unmarked, verified], all_versions=False, order=EUROPE_FIRST)
     assert shown == [verified, unmarked]

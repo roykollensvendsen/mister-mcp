@@ -340,7 +340,7 @@ find = '        clean = \{None: 0, "alternate": 1\}\.get\(version\.kind, 2\)'
 replace = '        clean = 0'
 
 [[rule]]
-name = "a verified dump comes before an unmarked one"
+name = "a verified dump comes before an unmarked one in the same region"
 file = "src/mister_mcp/versions.py"
 find = '        verified = 0 if version\.verified else 1'
 replace = '        verified = 0'
@@ -392,3 +392,15 @@ name = "an unset region order comes from the locale"
 file = "src/mister_mcp/settings.py"
 find = '    first = _first_region\(locale\)'
 replace = '    first = None'
+
+[[rule]]
+name = "more than zaparoos thousand results is refused as core does"
+file = "src/mister_mcp/simulator.py"
+find = '        if int\(params\.get\("maxResults", 0\)\) > ZAPAROO_MAX_RESULTS:'
+replace = '        if False:'
+
+[[rule]]
+name = "a start names the version it started"
+file = "src/mister_mcp/service.py"
+find = '            say = f"Started\. The MiSTer is \{describe\(active\)\}\{start\.version\}\."'
+replace = '            say = f"Started. The MiSTer is {describe(active)}."'

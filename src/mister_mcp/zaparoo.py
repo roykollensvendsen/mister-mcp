@@ -21,6 +21,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
 #: The only Zaparoo calls this plugin ever sends (ADR-MM-001).
+#: The most results media.search takes; Core refuses more (v2.22.1, pkg/api/models/params.go,
+#: SearchParams.MaxResults: gt=0, max=1000).
+ZAPAROO_MAX_RESULTS = 1000
 ALLOWED_METHODS = frozenset({"version", "media.active", "media.search", "systems", "run"})
 #: Zaparoo Core's default API port and path.
 PORT = 7497
