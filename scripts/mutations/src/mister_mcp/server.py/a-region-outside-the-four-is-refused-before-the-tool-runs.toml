@@ -1,0 +1,5 @@
+[[rule]]
+name = "a region outside the four is refused before the tool runs"
+file = "src/mister_mcp/server.py"
+find = '^Region = Literal\['
+replace = 'Region = str'

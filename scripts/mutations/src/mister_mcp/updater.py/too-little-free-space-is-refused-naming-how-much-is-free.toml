@@ -1,0 +1,5 @@
+[[rule]]
+name = "too little free space is refused naming how much is free"
+file = "src/mister_mcp/updater.py"
+find = '        if mb < MIN_FREE_MB:'
+replace = '        if mb < 0:'

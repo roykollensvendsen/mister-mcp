@@ -1,0 +1,5 @@
+[[rule]]
+name = "a re release is hidden when the cartridge itself is there"
+file = "src/mister_mcp/versions.py"
+find = '    return version\.kind in BESIDE_CLEAN_KINDS and _twin'
+replace = '    return version.kind in BESIDE_CLEAN_KINDS - {"re-release"} and _twin(result, version) in clean'

@@ -1,0 +1,5 @@
+[[rule]]
+name = "a slow launch is never asked for again"
+file = "src/mister_mcp/server.py"
+find = 'working=LAUNCH_WORKING,'
+replace = 'working=WORKING,'

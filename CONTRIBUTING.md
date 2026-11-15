@@ -85,10 +85,12 @@ and it changes only by hand.
 3. **Write a test and watch it fail.** A test that passes on its first run
    proves nothing. Where the rule already exists and no test can precede it,
    turn the rule off with `uv run python scripts/mutate.py`, watch a named test
-   go red, and keep the row in `scripts/mutations.toml`.
+   go red, and keep the row in `scripts/mutations/`.
 
    A rule is a line marked `# RULE: what it says` in the source. Every one needs
-   a row in `scripts/mutations.toml` and a test whose name is the rule's own
+   a row of its own in `scripts/mutations/`, in the folder that is the whole
+   path of its source and named after its words (see that folder's README),
+   and a test whose name is the rule's own
    words — `# RULE: a spoken reply is capped` wants
    `test_a_spoken_reply_is_capped`. `tests/test_rules_have_evidence.py` refuses
    a rule missing either. That naming is not decoration: the mutation script

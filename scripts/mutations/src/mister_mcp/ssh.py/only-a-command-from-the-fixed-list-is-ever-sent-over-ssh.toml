@@ -1,0 +1,5 @@
+[[rule]]
+name = "only a command from the fixed list is ever sent over ssh"
+file = "src/mister_mcp/ssh.py"
+find = '        if name not in ALLOWED_COMMANDS:'
+replace = '        if False:'

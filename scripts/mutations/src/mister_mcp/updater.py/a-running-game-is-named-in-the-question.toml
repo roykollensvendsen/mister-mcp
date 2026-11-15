@@ -1,0 +1,5 @@
+[[rule]]
+name = "a running game is named in the question"
+file = "src/mister_mcp/updater.py"
+find = '        if active:'
+replace = '        if False:'

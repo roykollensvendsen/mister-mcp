@@ -1,0 +1,5 @@
+[[rule]]
+name = "a module that reaches up a layer fails the check"
+file = "scripts/ratchet.py"
+find = 'if used in layers and layers\[used\] >= layers\[name\]$'
+replace = 'if used in layers and layers[used] < layers[name]'

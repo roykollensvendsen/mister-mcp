@@ -1,0 +1,5 @@
+[[rule]]
+name = "an unknown region in the settings is refused naming the setting and the four"
+file = "src/mister_mcp/settings.py"
+find = '    if not \(isinstance\(said, list\) and said'
+replace = '        if False:'

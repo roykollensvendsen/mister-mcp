@@ -1,0 +1,5 @@
+[[rule]]
+name = "hacks pirates trained translated and arcade files are hidden unless all versions are asked for"
+file = "src/mister_mcp/versions.py"
+find = '    if version\.kind in HIDDEN_KINDS:'
+replace = '    if False:'

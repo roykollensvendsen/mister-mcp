@@ -1,0 +1,5 @@
+[[rule]]
+name = "a missing key is said in the owners words"
+file = "src/mister_mcp/ssh.py"
+find = 'if any\(sign in said for sign in _ASKS_FOR_A_PASSWORD\):'
+replace = 'if False:'

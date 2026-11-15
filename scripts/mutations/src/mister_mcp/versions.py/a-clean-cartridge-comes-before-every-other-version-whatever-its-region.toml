@@ -1,0 +1,5 @@
+[[rule]]
+name = "a clean cartridge comes before every other version whatever its region"
+file = "src/mister_mcp/versions.py"
+find = '        clean = \{None: 0, "alternate": 1\}\.get\(version\.kind, 2\)'
+replace = '        clean = 0'

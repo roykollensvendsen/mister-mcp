@@ -1,0 +1,5 @@
+[[rule]]
+name = "a running game is never ended without a yes"
+file = "src/mister_mcp/service.py"
+find = 'if active:$'
+replace = 'if False:'

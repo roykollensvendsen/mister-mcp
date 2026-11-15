@@ -1,0 +1,5 @@
+[[rule]]
+name = "a re release is read from zaparoos tags first"
+file = "src/mister_mcp/versions.py"
+find = '    said = any\('
+replace = '    said = False and any('

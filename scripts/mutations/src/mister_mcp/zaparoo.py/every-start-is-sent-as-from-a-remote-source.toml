@@ -1,0 +1,5 @@
+[[rule]]
+name = "every start is sent as from a remote source"
+file = "src/mister_mcp/zaparoo.py"
+find = 'await self\.call\("run", \{"text": text, "unsafe": True\}, wait=RUN_WAIT\)'
+replace = 'await self.call("run", {"text": text}, wait=RUN_WAIT)'

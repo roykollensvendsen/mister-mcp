@@ -1,0 +1,5 @@
+[[rule]]
+name = "a mister that answers without zaparoo is called on"
+file = "src/mister_mcp/service.py"
+find = 'return _unreachable\(error, on=True, system=None, game=None\)'
+replace = 'return _unreachable(error, on=None, system=None, game=None)'

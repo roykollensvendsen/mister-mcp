@@ -1,0 +1,5 @@
+[[rule]]
+name = "a mister that does not answer is not called on or off"
+file = "src/mister_mcp/service.py"
+find = 'return _unreachable\(error, on=None, system=None, game=None\)'
+replace = 'return {"success": True, "outcome": "done", "say": "The MiSTer is off.", "on": False, "system": None, "game": None}'

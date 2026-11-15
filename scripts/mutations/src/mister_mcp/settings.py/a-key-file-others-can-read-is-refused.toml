@@ -1,0 +1,5 @@
+[[rule]]
+name = "a key file others can read is refused"
+file = "src/mister_mcp/settings.py"
+find = 'if path\.stat\(\)\.st_mode & \(stat\.S_IRWXG \| stat\.S_IRWXO\):'
+replace = 'if False:'

@@ -1,0 +1,5 @@
+[[rule]]
+name = "a spent or expired pin is said as needing a new pin"
+file = "src/mister_mcp/pairing.py"
+find = '    "no pairing in progress": NEW_PIN,'
+replace = '    "no pairing in progress": REFUSALS[400],'

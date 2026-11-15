@@ -27,7 +27,7 @@ name and starts it. What it reuses, and why, is in [`decisions/`](decisions/READ
    `scripts/no_session_links.py` refuses it.
 5. **Never touch the real MiSTer** unless the owner asks for it in this
    session. The simulator is for every try until then.
-6. Every line marked `# RULE:` has a row in `scripts/mutations.toml` and a
+6. Every line marked `# RULE:` has a row of its own in `scripts/mutations/` and a
    test named after it, and `uv run python scripts/mutate.py` must show each
    rule's own test going red.
 

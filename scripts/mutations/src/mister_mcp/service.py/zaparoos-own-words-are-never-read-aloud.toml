@@ -1,0 +1,5 @@
+[[rule]]
+name = "zaparoos own words are never read aloud"
+file = "src/mister_mcp/service.py"
+find = 'say = REFUSALS\.get\(error\.category or "", REFUSED\)'
+replace = 'say = f"{error}. " + REFUSALS.get(error.category or "", REFUSED)'

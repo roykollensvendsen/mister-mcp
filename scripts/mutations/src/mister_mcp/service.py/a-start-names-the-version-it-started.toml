@@ -1,0 +1,5 @@
+[[rule]]
+name = "a start names the version it started"
+file = "src/mister_mcp/service.py"
+find = '            say = f"Started\. The MiSTer is \{describe\(active\)\}\{start\.version\}\."'
+replace = '            say = f"Started. The MiSTer is {describe(active)}."'

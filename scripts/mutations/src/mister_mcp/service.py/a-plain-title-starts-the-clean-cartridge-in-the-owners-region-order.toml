@@ -1,0 +1,5 @@
+[[rule]]
+name = "a plain title starts the clean cartridge in the owners region order"
+file = "src/mister_mcp/service.py"
+find = '        first\.setdefault\('
+replace = '        first[str((result.get("system") or {}).get("id", ""))] = result'

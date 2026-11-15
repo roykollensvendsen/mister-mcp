@@ -1,0 +1,5 @@
+[[rule]]
+name = "a search for one system asks zaparoo for that system only"
+file = "src/mister_mcp/zaparoo.py"
+find = '            params\["systems"\] = \[system\]'
+replace = '            pass'

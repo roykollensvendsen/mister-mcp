@@ -1,0 +1,5 @@
+[[rule]]
+name = "hits come in the region order given then those with no region"
+file = "src/mister_mcp/versions.py"
+find = '        region = min\(\(rank\[r\] for r in version\.regions'
+replace = '        region = 0'

@@ -1,0 +1,5 @@
+[[rule]]
+name = "a game is started only by the text its search result gave"
+file = "src/mister_mcp/zaparoo.py"
+find = 'if not _GAME_TEXT\.fullmatch\(zapscript\):'
+replace = 'if False:'

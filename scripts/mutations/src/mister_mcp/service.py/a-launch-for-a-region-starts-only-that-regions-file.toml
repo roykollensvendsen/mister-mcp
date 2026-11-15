@@ -1,0 +1,5 @@
+[[rule]]
+name = "a launch for a region starts only that regions file"
+file = "src/mister_mcp/service.py"
+find = '    return \[r for r in results if region is None'
+replace = '    return results'

@@ -1,0 +1,5 @@
+[[rule]]
+name = "a search for no results at all is refused as core does"
+file = "src/mister_mcp/simulator.py"
+find = '        if not 0 < int\(params\.get\("maxResults", 0\)\) <= ZAPAROO_MAX_RESULTS:'
+replace = '        if int(params.get("maxResults", 0)) > ZAPAROO_MAX_RESULTS:'

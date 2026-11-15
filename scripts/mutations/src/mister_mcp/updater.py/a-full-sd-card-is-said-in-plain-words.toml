@@ -1,0 +1,5 @@
+[[rule]]
+name = "a full sd card is said in plain words"
+file = "src/mister_mcp/updater.py"
+find = '    if "is FULL" in text:'
+replace = '    if False:'

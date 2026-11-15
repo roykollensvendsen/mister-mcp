@@ -1,0 +1,5 @@
+[[rule]]
+name = "an alternate dump is hidden only when a clean one of the same title and region exists"
+file = "src/mister_mcp/versions.py"
+find = '    return version\.kind in BESIDE_CLEAN_KINDS and _twin'
+replace = '    return version.kind in BESIDE_CLEAN_KINDS - {"alternate"} and _twin(result, version) in clean or version.kind == "alternate"'
