@@ -141,7 +141,7 @@ def test_a_sweep_leaves_anything_not_named_like_a_run_alone(name, tmp_path, monk
     tmpdir = tmp_path / "tmp"
     tmpdir.mkdir()
     module, base = _base(name, tmpdir, monkeypatch, tmp_path)
-    base.mkdir(parents=True)
+    base.mkdir(mode=0o700, parents=True)
     (base / "notes").mkdir()
     outside = tmp_path / "outside"
     outside.mkdir()
@@ -150,3 +150,19 @@ def test_a_sweep_leaves_anything_not_named_like_a_run_alone(name, tmp_path, monk
     module.sweep()
     assert (base / "notes").is_dir()
     assert (outside / "kept.txt").exists()
+
+
+def test_pytest_s_folder_sits_beside_the_run_s_lock_never_around_it(tmp_path, monkeypatch):
+    """Point 1: pytest empties its basetemp first, which would take the lock with it."""
+    tmpdir = tmp_path / "tmp"
+    tmpdir.mkdir()
+    mutate = _load("mutate", tmpdir, monkeypatch)
+    project = tmp_path / "project"
+    (project / "tests").mkdir(parents=True)
+    (project / "tests" / "test_lock.py").write_text(
+        "def test_the_lock_is_still_there(tmp_path):\n"
+        "    assert (tmp_path.parent.parent / '.lock').exists()\n"
+    )
+    monkeypatch.setattr(mutate, "ROOT", project)
+    failed, _ = mutate.run_suite()
+    assert failed == 0
