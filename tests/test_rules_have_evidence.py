@@ -21,7 +21,6 @@ import sys
 import pytest
 
 ROOT = pathlib.Path(__file__).parent.parent
-MARKER = re.compile(r"^[ \t]*#\s*RULE:\s*(.+?)\s*$")
 
 
 def _mutate():
@@ -39,12 +38,12 @@ def marked_rules() -> set[str]:
     # skill ships carry rules that skill proves.
     scripts = [
         ROOT / "scripts" / n
-        for n in ("no_session_links.py", "private_data_scan.py", "ratchet.py", "run_folders.py")
+        for n in ("no_session_links.py", "private_data_scan.py", "ratchet.py", "run_folders.py", "mutate.py")
     ]
     sources = [*(ROOT / "src").rglob("*.py"), *scripts]
     for source in sorted(sources):
-        for line in source.read_text().splitlines():
-            match = MARKER.search(line)
+        for line in source.read_text(encoding="utf-8").splitlines():
+            match = _mutate().MARKER.search(line)
             if match:
                 found.add(match.group(1))
     return found
