@@ -7,6 +7,7 @@ import pathlib
 import subprocess
 import sys
 import threading
+import time
 
 import pytest
 
@@ -78,11 +79,60 @@ def test_the_tv_table_needs_a_command_and_a_name():
 
 
 def test_the_tv_plugin_is_closed_after_every_use_even_a_slow_one(tmp_path, monkeypatch):
-    monkeypatch.setattr("mister_mcp.tv.TV_WITHIN", 0.05)
+    """The TV's time runs out while it answers, after its plugin has started."""
+    monkeypatch.setattr("mister_mcp.tv.TV_WITHIN", 3.0)
     log = tmp_path / "calls.log"
     log.touch()
-    plugin = TvPlugin(command=[sys.executable, str(FAKE), "on", str(log)], tv="the den", device="Game box")
+    command = [sys.executable, str(FAKE), "on", str(log), "60", "answer"]
+    plugin = TvPlugin(command=command, tv="the den", device="Game box")
     # A plugin left open keeps the step from ending, which _bounded turns into a failure.
     answer = _bounded(lambda: show_mister(plugin), log)
     assert answer["outcome"] == "working"
     assert not plugin.is_open
+
+
+def _running_with(marker, within=10.0):
+    """The processes, zombies aside, still running with `marker` in their command after `within` s."""
+    deadline = time.monotonic() + within
+    while True:
+        found = []
+        for proc in pathlib.Path("/proc").glob("[0-9]*"):
+            try:
+                if marker in proc.joinpath("cmdline").read_text() and "State:\tZ" not in (
+                    proc.joinpath("status").read_text()
+                ):
+                    found.append(proc.name)
+            except OSError:
+                continue
+        if not found or time.monotonic() >= deadline:
+            return found
+        time.sleep(0.05)
+
+
+async def _start_cut_short(plugin):
+    """Enter the plugin as any caller would, with a limit that runs out while it starts."""
+    try:
+        async with asyncio.timeout(0.5), plugin:
+            pass
+    except TimeoutError:
+        return "cut short"
+    return "started"
+
+
+@pytest.mark.skipif(not pathlib.Path("/proc").is_dir(), reason="reads running processes from /proc")
+@pytest.mark.parametrize("caller", ["launch", "any"])
+def test_a_tv_plugin_whose_start_is_cut_short_is_still_stopped(tmp_path, monkeypatch, caller):
+    """The TV's time runs out while its plugin is still starting, as on a busy machine."""
+    monkeypatch.setattr("mister_mcp.tv.TV_WITHIN", 0.5)
+    log = tmp_path / "calls.log"
+    log.touch()
+    command = [sys.executable, str(FAKE), "on", str(log), "60"]
+    plugin = TvPlugin(command=command, tv="the den", device="Game box")
+    if caller == "launch":
+        assert _bounded(lambda: show_mister(plugin), log)["outcome"] == "working"
+    else:
+        assert _bounded(lambda: _start_cut_short(plugin), log) == "cut short"
+    assert not plugin.is_open
+    left = _running_with(str(log))
+    subprocess.run(["pkill", "-f", str(log)], check=False)
+    assert not left, f"the TV plugin was left running after its start was cut short: {left}"
