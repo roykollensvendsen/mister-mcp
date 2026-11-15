@@ -230,7 +230,9 @@ def run_suite() -> tuple[int, list[str]]:
                 "--color=no",
                 "-p",
                 "no:cacheprovider",
-                f"--basetemp={temporary}",
+                # Beside the run's lock, never around it: pytest empties its basetemp first.
+                # RULE: pytest s folder sits beside the run s lock
+                f"--basetemp={temporary / 'pytest'}",
             ],
             capture_output=True,
             text=True,

@@ -1,0 +1,5 @@
+[[rule]]
+name = "a folder with no lock is dead only after the grace period"
+file = "scripts/run_folders.py"
+find = 'return time\.time\(\) - found\.st_mtime >= STARTING_SECONDS'
+replace = 'return True'
