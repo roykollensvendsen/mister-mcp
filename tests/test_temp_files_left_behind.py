@@ -76,8 +76,8 @@ def test_a_killed_ratchet_s_copy_of_main_is_swept_at_the_next_start(tmp_path, mo
     ratchet = _load("ratchet", tmpdir, monkeypatch)
     repository = _repository(tmp_path / "repository")
     monkeypatch.setattr(ratchet, "ROOT", repository)
-    left = ratchet.RATCHET_TMP / "base-left-by-a-killed-run"
-    left.mkdir(parents=True)
+    left, lock = ratchet.run_folders.start_run(ratchet.RATCHET_TMP)
+    os.close(lock)  # a killed run's lock goes with its process
     _git("worktree", "add", "-q", "--detach", str(left / "base"), "HEAD", cwd=repository)
     ratchet.sweep()
     assert list(tmpdir.iterdir()) == []
@@ -109,3 +109,44 @@ def test_a_stopped_run_still_removes_its_temporary_files(name, tmp_path):
     while list(tmpdir.iterdir()) and time.monotonic() < deadline:
         time.sleep(0.05)
     assert list(tmpdir.iterdir()) == []
+
+
+def _base(name, tmpdir, monkeypatch, tmp_path):
+    """A script, and the folder its runs live in."""
+    module = _load(name, tmpdir, monkeypatch)
+    if name == "ratchet":
+        monkeypatch.setattr(module, "ROOT", _repository(tmp_path / "repository"))
+        return module, module.RATCHET_TMP
+    return module, module.MUTATE_TMP
+
+
+@pytest.mark.parametrize("name", ["ratchet", "mutate"])
+def test_a_sweep_never_removes_a_folder_a_live_run_holds(name, tmp_path, monkeypatch):
+    """Two runs in one checkout: the second one's sweep must leave the first one's folder alone."""
+    tmpdir = tmp_path / "tmp"
+    tmpdir.mkdir()
+    module, base = _base(name, tmpdir, monkeypatch, tmp_path)
+    live, lock = module.run_folders.start_run(base)
+    try:
+        (live / "work.txt").write_text("in use")
+        module.sweep()
+        assert (live / "work.txt").read_text() == "in use"
+    finally:
+        os.close(lock)
+
+
+@pytest.mark.parametrize("name", ["ratchet", "mutate"])
+def test_a_sweep_leaves_anything_not_named_like_a_run_alone(name, tmp_path, monkeypatch):
+    """Only a real folder of this user's, named like a run's, is ever looked at; a link is never followed."""
+    tmpdir = tmp_path / "tmp"
+    tmpdir.mkdir()
+    module, base = _base(name, tmpdir, monkeypatch, tmp_path)
+    base.mkdir(parents=True)
+    (base / "notes").mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "kept.txt").write_text("x")
+    (base / "run-000000000001").symlink_to(outside)
+    module.sweep()
+    assert (base / "notes").is_dir()
+    assert (outside / "kept.txt").exists()
