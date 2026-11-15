@@ -29,9 +29,13 @@ from __future__ import annotations
 
 import argparse
 import ast
+import contextlib
+import hashlib
 import json
 import os
 import re
+import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -44,6 +48,39 @@ if TYPE_CHECKING:
 
 # The tree to measure: this one, or a copy of the base named by RATCHET_ROOT (see measure_at).
 ROOT = Path(os.environ.get("RATCHET_ROOT") or Path(__file__).resolve().parent.parent)
+#: Where measure_at keeps its copy of the base, one folder per run, outside the checkout;
+#: named after this checkout, so two checkouts never sweep each other's.
+RATCHET_TMP = Path(tempfile.gettempdir()) / (
+    "mister-mcp-ratchet-"
+    + hashlib.sha256(str(Path(__file__).resolve().parent.parent).encode()).hexdigest()[:8]
+)
+
+
+def stop_cleanly() -> None:
+    """Make SIGTERM end the run as Ctrl-C does, so every finally and with still runs."""
+    signal.signal(signal.SIGTERM, _stopped)
+
+
+def _stopped(number: int, _frame: object) -> None:
+    raise SystemExit(128 + number)
+
+
+def sweep() -> None:
+    """Remove what a killed run left: its copy of the base, and the worktree git keeps for it."""
+    # RULE: a killed ratchet s copy of main is swept at the next start
+    for left in sorted(RATCHET_TMP.iterdir()) if RATCHET_TMP.is_dir() else []:
+        _run("git", "worktree", "remove", "--force", str(left / "base"), cwd=ROOT)
+        shutil.rmtree(left, ignore_errors=True)
+    _run("git", "worktree", "prune", cwd=ROOT)
+    _forget(RATCHET_TMP)
+
+
+def _forget(folder: Path) -> None:
+    """Remove a run's own folder once nothing is left in it."""
+    with contextlib.suppress(OSError):
+        folder.rmdir()
+
+
 FILE = ROOT / "quality.json"
 SOURCE = ROOT / "src"
 PACKAGE = SOURCE / "mister_mcp"
@@ -374,12 +411,21 @@ def base_levels(kept: Path | None, measure_base: Callable[[], dict[str, Any]]) -
 
 
 def measure_at(ref: str) -> dict[str, Any]:
+    """Measure `ref` in a copy of it, then remove the copy and the folder it lived in."""
+    try:
+        return _measure_in_copy(ref)
+    finally:
+        _forget(RATCHET_TMP)
+
+
+def _measure_in_copy(ref: str) -> dict[str, Any]:
     """Measure `ref` in a copy of it, with this ratchet, so both sides are measured alike.
 
     The copy keeps its own tests and scripts unchanged: this ratchet runs from where it is
     and is pointed at the copy, so the base is measured exactly as it stands.
     """
-    with tempfile.TemporaryDirectory() as tmp:
+    RATCHET_TMP.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="base-", dir=RATCHET_TMP) as tmp:
         copy, out = Path(tmp) / "base", Path(tmp) / "levels.json"
         added = _run("git", "worktree", "add", "--detach", str(copy), ref)
         if added.returncode:
@@ -398,7 +444,7 @@ def measure_at(ref: str) -> dict[str, Any]:
                 raise SystemExit(msg)
             return dict(json.loads(out.read_text()))
         finally:
-            _run("git", "worktree", "remove", "--force", str(copy))
+            _run("git", "worktree", "remove", "--force", str(copy), cwd=ROOT)
 
 
 def main() -> int:
@@ -410,12 +456,14 @@ def main() -> int:
     parser.add_argument("--out", type=Path, help="where to write the levels measured now")
     parser.add_argument("--skip-mutation", action="store_true")
     args = parser.parse_args()
+    stop_cleanly()
     if args.action == "measure":
         now = measure()
         if args.out:
             write_levels(args.out, now)
         sys.stdout.write(json.dumps(now, indent=2, sort_keys=True) + "\n")
         return 0
+    sweep()
     if not args.base:
         sys.stderr.write("check needs --base, the ref to compare with (usually origin/main).\n")
         return 1
