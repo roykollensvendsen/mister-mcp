@@ -70,18 +70,25 @@ def test_a_mutation_run_leaves_nothing_in_the_temporary_folder(tmp_path, monkeyp
 
 
 def test_a_killed_ratchet_s_copy_of_main_is_swept_at_the_next_start(tmp_path, monkeypatch):
-    """A kill skips every finally: the copy and the worktree git keeps for it stay behind."""
+    """A kill skips every finally: the copy stays behind until the next start sweeps it.
+
+    The sweep removes only the run's own folder. It never prunes git's worktree records,
+    which would erase other sessions' records of their own worktrees too.
+    """
     tmpdir = tmp_path / "tmp"
     tmpdir.mkdir()
     ratchet = _load("ratchet", tmpdir, monkeypatch)
     repository = _repository(tmp_path / "repository")
     monkeypatch.setattr(ratchet, "ROOT", repository)
+    other = tmp_path / "another-session-s-worktree"
+    _git("worktree", "add", "-q", "--detach", str(other), "HEAD", cwd=repository)
+    _git("worktree", "lock", str(other), cwd=repository)
     left, lock = ratchet.run_folders.start_run(ratchet.RATCHET_TMP)
     os.close(lock)  # a killed run's lock goes with its process
-    _git("worktree", "add", "-q", "--detach", str(left / "base"), "HEAD", cwd=repository)
+    ratchet.copy_of("HEAD", left / "base")
     ratchet.sweep()
     assert list(tmpdir.iterdir()) == []
-    assert str(left) not in _git("worktree", "list", cwd=repository)
+    assert str(other) in _git("worktree", "list", cwd=repository)
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="no SIGTERM to send on Windows")
