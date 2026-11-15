@@ -9,6 +9,7 @@ whatever a killed run left is swept away at the next start.
 """
 
 import importlib.util
+import os
 import pathlib
 import sys
 
@@ -67,7 +68,8 @@ def test_removing_a_run_s_files_never_changes_a_folder_it_links_to(tmp_path, mon
 
 def test_a_killed_run_s_temporary_files_are_swept_at_the_next_start(tmp_path, monkeypatch):
     mutate = _mutate(tmp_path, monkeypatch)
-    left = mutate.MUTATE_TMP / "run-left-by-a-killed-run"
+    left, lock = mutate.run_folders.start_run(mutate.MUTATE_TMP)
+    os.close(lock)  # a killed run's lock goes with its process
     (left / "shut").mkdir(parents=True)
     (left / "shut" / "inside.txt").write_text("x")
     (left / "shut").chmod(0)
