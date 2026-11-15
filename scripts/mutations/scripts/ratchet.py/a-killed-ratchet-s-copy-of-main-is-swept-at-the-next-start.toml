@@ -1,5 +1,5 @@
 [[rule]]
 name = "a killed ratchet s copy of main is swept at the next start"
 file = "scripts/ratchet.py"
-find = 'for left in sorted\(RATCHET_TMP\.iterdir\(\)\) if RATCHET_TMP\.is_dir\(\) else \[\]:'
+find = 'for left in run_folders\.dead_runs\(RATCHET_TMP\):'
 replace = 'for left in []:'

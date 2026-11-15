@@ -19,16 +19,14 @@ what requires that test to exist in the first place.
 from __future__ import annotations
 
 import argparse
-import contextlib
 import datetime as dt
 import hashlib
+import importlib.util
 import json
 import os
 import pathlib
 import re
-import shutil
 import signal
-import stat
 import subprocess
 import sys
 import tempfile
@@ -36,9 +34,23 @@ import tomllib
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from types import ModuleType
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+
+def _beside(name: str) -> ModuleType:
+    """A module from this script's own folder, loaded by path: scripts/ is not a package."""
+    spec = importlib.util.spec_from_file_location(
+        name, pathlib.Path(__file__).resolve().parent / f"{name}.py"
+    )
+    module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
+    return module
+
+
+run_folders = _beside("run_folders")
+
 #: One file per rule: scripts/mutations/<the whole path of its source>/<its words>.toml.
 ROWS = ROOT / "scripts/mutations"
 #: Where the one mutated file is recorded while it is mutated. A `finally` does
@@ -140,43 +152,15 @@ def line_of(text: str, pattern: str, occurrence: int) -> int:
     raise SystemExit(msg)
 
 
-def _open_up(place: pathlib.Path) -> None:
-    """Give the owner back every right on one folder or file, adding to the rights it has.
-
-    A link is left alone: changing its rights would change whatever it points to,
-    which may be outside the run's folder.
-    """
-    if place.is_symlink():
-        return
-    with contextlib.suppress(OSError):
-        place.chmod(place.stat().st_mode | stat.S_IRWXU)
-
-
-def _writable_again(func: Callable[[str], object], path: str, _exc: object) -> None:
-    """Let a refused delete through: open up the path and its folder, then try again."""
-    for place in (pathlib.Path(path).parent, pathlib.Path(path)):
-        _open_up(place)
-    func(path)
-
-
-def _remove(folder: pathlib.Path) -> None:
-    """Delete a run's folder, even where a test took away the rights to read or delete it."""
-    if not folder.exists():
-        return
-    # A folder a test shut (mode 0) cannot even be listed, so open every folder first;
-    # the handler then covers anything that still refuses.
-    for place, folders, _ in os.walk(folder):
-        for name in folders:
-            _open_up(pathlib.Path(place) / name)
-    shutil.rmtree(folder, onexc=_writable_again)
+_remove = run_folders.remove
 
 
 def sweep() -> None:
     """Remove what an earlier run, killed before it could clean up, left behind."""
     # RULE: a killed run's temporary files are swept at the next start
-    for left in MUTATE_TMP.iterdir() if MUTATE_TMP.is_dir() else []:
+    for left in run_folders.dead_runs(MUTATE_TMP):
         _remove(left)
-    _forget_folder()
+    run_folders.forget(MUTATE_TMP)
 
 
 def _clean_start() -> None:
@@ -193,12 +177,6 @@ def stop_cleanly() -> None:
 
 def _stopped(number: int, _frame: object) -> None:
     raise SystemExit(128 + number)
-
-
-def _forget_folder() -> None:
-    """Remove the folder the runs live in once the last one has gone."""
-    with contextlib.suppress(OSError):
-        MUTATE_TMP.rmdir()
 
 
 def repair() -> None:
@@ -240,8 +218,7 @@ def run_suite() -> tuple[int, list[str]]:
     # the wrong rule, so no bytecode is written at all.
     # RULE: two mutations never share a bytecode cache
     env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
-    MUTATE_TMP.mkdir(parents=True, exist_ok=True)
-    temporary = pathlib.Path(tempfile.mkdtemp(prefix="run-", dir=MUTATE_TMP))
+    temporary, lock = run_folders.start_run(MUTATE_TMP)
     try:
         r = subprocess.run(  # noqa: S603 - this interpreter running pytest, nothing from outside
             [
@@ -263,9 +240,8 @@ def run_suite() -> tuple[int, list[str]]:
         )
     finally:
         # RULE: a suite run leaves no temporary files behind
-        _remove(temporary)
         # RULE: a mutation run leaves nothing in the temporary folder
-        _forget_folder()
+        run_folders.end_run(temporary, lock, MUTATE_TMP)
     # --color=no covers the usual run; stripping covers a configuration that
     # turns colour back on, which would otherwise make every kill unattributable.
     # RULE: a coloured failure line is still attributed

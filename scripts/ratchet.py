@@ -29,12 +29,11 @@ from __future__ import annotations
 
 import argparse
 import ast
-import contextlib
 import hashlib
+import importlib.util
 import json
 import os
 import re
-import shutil
 import signal
 import subprocess
 import sys
@@ -45,9 +44,21 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from types import ModuleType
 
 # The tree to measure: this one, or a copy of the base named by RATCHET_ROOT (see measure_at).
 ROOT = Path(os.environ.get("RATCHET_ROOT") or Path(__file__).resolve().parent.parent)
+
+
+def _beside(name: str) -> ModuleType:
+    """A module from this script's own folder, loaded by path: scripts/ is not a package."""
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parent / f"{name}.py")
+    module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
+    return module
+
+
+run_folders = _beside("run_folders")
 #: Where measure_at keeps its copy of the base, one folder per run, outside the checkout;
 #: named after this checkout, so two checkouts never sweep each other's.
 RATCHET_TMP = Path(tempfile.gettempdir()) / (
@@ -68,17 +79,11 @@ def _stopped(number: int, _frame: object) -> None:
 def sweep() -> None:
     """Remove what a killed run left: its copy of the base, and the worktree git keeps for it."""
     # RULE: a killed ratchet s copy of main is swept at the next start
-    for left in sorted(RATCHET_TMP.iterdir()) if RATCHET_TMP.is_dir() else []:
+    for left in run_folders.dead_runs(RATCHET_TMP):
         _run("git", "worktree", "remove", "--force", str(left / "base"), cwd=ROOT)
-        shutil.rmtree(left, ignore_errors=True)
+        run_folders.remove(left)
     _run("git", "worktree", "prune", cwd=ROOT)
-    _forget(RATCHET_TMP)
-
-
-def _forget(folder: Path) -> None:
-    """Remove a run's own folder once nothing is left in it."""
-    with contextlib.suppress(OSError):
-        folder.rmdir()
+    run_folders.forget(RATCHET_TMP)
 
 
 FILE = ROOT / "quality.json"
@@ -415,7 +420,7 @@ def measure_at(ref: str) -> dict[str, Any]:
     try:
         return _measure_in_copy(ref)
     finally:
-        _forget(RATCHET_TMP)
+        run_folders.forget(RATCHET_TMP)
 
 
 def _measure_in_copy(ref: str) -> dict[str, Any]:
@@ -424,9 +429,9 @@ def _measure_in_copy(ref: str) -> dict[str, Any]:
     The copy keeps its own tests and scripts unchanged: this ratchet runs from where it is
     and is pointed at the copy, so the base is measured exactly as it stands.
     """
-    RATCHET_TMP.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="base-", dir=RATCHET_TMP) as tmp:
-        copy, out = Path(tmp) / "base", Path(tmp) / "levels.json"
+    run, lock = run_folders.start_run(RATCHET_TMP)
+    try:
+        copy, out = run / "base", run / "levels.json"
         added = _run("git", "worktree", "add", "--detach", str(copy), ref)
         if added.returncode:
             msg = f"Cannot check out {ref} to measure it:\n{added.stderr}"
@@ -445,6 +450,8 @@ def _measure_in_copy(ref: str) -> dict[str, Any]:
             return dict(json.loads(out.read_text()))
         finally:
             _run("git", "worktree", "remove", "--force", str(copy), cwd=ROOT)
+    finally:
+        run_folders.end_run(run, lock, RATCHET_TMP)
 
 
 def main() -> int:
