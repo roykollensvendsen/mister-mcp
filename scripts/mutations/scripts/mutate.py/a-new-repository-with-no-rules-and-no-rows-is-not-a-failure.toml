@@ -1,0 +1,5 @@
+[[rule]]
+name = "a new repository with no rules and no rows is not a failure"
+file = "scripts/mutate.py"
+find = 'if not rules:'
+replace = 'if False:'

@@ -1,0 +1,5 @@
+[[rule]]
+name = "a killed run's temporary files are swept at the next start"
+file = "scripts/mutate.py"
+find = 'for left in run_folders\.dead_runs\(MUTATE_TMP\):'
+replace = 'for left in []:'

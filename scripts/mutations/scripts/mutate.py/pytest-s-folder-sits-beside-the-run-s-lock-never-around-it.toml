@@ -1,0 +1,5 @@
+[[rule]]
+name = "pytest s folder sits beside the run s lock never around it"
+file = "scripts/mutate.py"
+find = "f\\\"--basetemp=\\{temporary / 'pytest'\\}\\\","
+replace = 'f"--basetemp={temporary}",'

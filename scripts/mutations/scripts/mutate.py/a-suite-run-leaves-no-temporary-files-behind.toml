@@ -1,0 +1,5 @@
+[[rule]]
+name = "a suite run leaves no temporary files behind"
+file = "scripts/mutate.py"
+find = 'run_folders\.end_run\(temporary, lock, MUTATE_TMP\)'
+replace = 'os.close(lock)'
