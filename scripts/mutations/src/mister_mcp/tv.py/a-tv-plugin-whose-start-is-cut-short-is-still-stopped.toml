@@ -1,0 +1,5 @@
+[[rule]]
+name = "a tv plugin whose start is cut short is still stopped"
+file = "src/mister_mcp/tv.py"
+find = 'await self\.__aexit__\(\)'
+replace = 'pass'
