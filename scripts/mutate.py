@@ -74,8 +74,9 @@ def _row_files(folder: pathlib.Path) -> list[pathlib.Path]:
     return sorted(folder.rglob("*.toml")) if folder.is_dir() else []
 
 
-def all_rows(folder: pathlib.Path = ROWS) -> list[dict]:
+def all_rows(folder: pathlib.Path | None = None) -> list[dict]:
     """Every row, one file each, in path order; a rule with two rows is refused."""
+    folder = ROWS if folder is None else folder
     where: dict[str, str] = {}
     rows = []
     for path in _row_files(folder):
@@ -92,8 +93,9 @@ def all_rows(folder: pathlib.Path = ROWS) -> list[dict]:
     return rows
 
 
-def misfiled(folder: pathlib.Path = ROWS) -> list[str]:
+def misfiled(folder: pathlib.Path | None = None) -> list[str]:
     """Row files that hold other than one row, or sit where their rule does not put them."""
+    folder = ROWS if folder is None else folder
     found = []
     for path in _row_files(folder):
         here = pathlib.PurePosixPath(path.relative_to(folder).as_posix())
@@ -103,6 +105,15 @@ def misfiled(folder: pathlib.Path = ROWS) -> list[str]:
         elif here != (belongs := row_path(rows[0])):
             found.append(f"{here} should be {belongs}; move it there")
     return found
+
+
+#: A rule's marker in the source, as tests/test_rules_have_evidence.py reads it.
+MARKER = re.compile(r"^[ \t]*#\s*RULE:\s*(.+?)\s*$", re.MULTILINE)
+
+
+def marked_rules() -> list[str]:
+    """Every rule the source under src/ marks."""
+    return [m for path in sorted((ROOT / "src").rglob("*.py")) for m in MARKER.findall(path.read_text())]
 
 
 def test_name_for(rule: str) -> str:
@@ -244,6 +255,20 @@ def run_suite() -> tuple[int, list[str]]:
     return int(m.group(1)) if m else 0, [f.split("::")[-1].split("[")[0] for f in failed]
 
 
+def _no_rows() -> int:
+    """With no rows, pass only a repository that marks no rules yet."""
+    marked = marked_rules()
+    if marked:
+        print(  # noqa: T201
+            f"{len(marked)} rule{'s' if len(marked) != 1 else ''} marked in src/ but no rows in"
+            f" {ROWS.relative_to(ROOT)}/; nothing was switched off. Put the rows back with"
+            " `git checkout origin/main -- scripts/mutations`, then run this again."
+        )
+        return 1
+    print(f"no rules in {ROWS.relative_to(ROOT)}/ yet; add one per rule the code enforces")  # noqa: T201
+    return 0
+
+
 def main() -> int:
     """Mutate every rule in turn, restore the tree, and report."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -255,8 +280,7 @@ def main() -> int:
     # A scaffolded repository starts with a table of comments and no rows.
     rules = all_rows()
     if not rules:
-        print(f"no rules in {ROWS.relative_to(ROOT)}/ yet; add one per rule the code enforces")  # noqa: T201
-        return 0
+        return _no_rows()
     results = []
     lost: list[str] = []
     standing: tuple[pathlib.Path, str, str] | None = None
