@@ -1,0 +1,5 @@
+[[rule]]
+name = "a run s lock is made new"
+file = "scripts/run_folders.py"
+find = 'lock = os\.open\(starting / LOCK, OPEN_NEW_LOCK, 0o600\)'
+replace = 'lock = os.open(starting / LOCK, OPEN_NEW_LOCK & ~os.O_EXCL, 0o600)'

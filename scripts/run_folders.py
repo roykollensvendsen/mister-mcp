@@ -33,10 +33,16 @@ NAMED = re.compile(r"run-\d{12}")
 #: A run's folder is made under this name, locked, and only then given its run name, so a
 #: sweep never sees a run's name without its lock held. A run killed in between leaves one.
 STARTING = re.compile(r"starting-\w+")
-#: How old an unlocked starting folder must be before it counts as left by a killed run.
+#: How old a folder with no lock, run- or starting- alike, must be before it counts as left
+#: by a killed run. A guess: a run takes well under a second to start and lock its folder,
+#: and nothing measured says how long a run killed while starting may sit before then.
 STARTING_SECONDS = 3600
 LOCK = ".lock"
-OPEN_LOCK = os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW
+#: A run's own lock is always new: a lock file someone else made first is never shared.
+OPEN_NEW_LOCK = os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+#: A sweep only opens a lock that is there: one it made would sit in a new run's folder
+#: before that run moves in, and the run's rename onto it would then fail.
+OPEN_THEIR_LOCK = os.O_RDWR | os.O_NOFOLLOW
 
 
 def _open_up(place: pathlib.Path) -> None:
@@ -65,11 +71,44 @@ def remove(folder: pathlib.Path) -> None:
     shutil.rmtree(folder, onexc=_writable_again)
 
 
+def private_base(base: pathlib.Path) -> None:
+    """Stop unless `base` is a real folder of this user's that nobody else may use.
+
+    The base has a fixed name in the shared temporary folder, so anyone could make it
+    first, or put a link there. Opened without following a link, then checked as opened.
+    """
+    # RULE: the base folder must be a private folder of ours
+    try:
+        handle = os.open(base, os.O_RDONLY | os.O_NOFOLLOW | os.O_DIRECTORY)
+    except OSError:
+        found = None
+    else:
+        try:
+            found = os.fstat(handle)
+        finally:
+            os.close(handle)
+    if not (
+        found is not None
+        and stat.S_ISDIR(found.st_mode)
+        and found.st_uid == os.getuid()
+        and found.st_mode & 0o077 == 0
+    ):
+        msg = (
+            f"{base} is not a private folder of yours: it is a link, a file, someone else's, "
+            f"or open to other users, so nothing was run in it. Remove it with `rm -r {base}` "
+            "and run this again."
+        )
+        raise SystemExit(msg)
+
+
 def start_run(base: pathlib.Path) -> tuple[pathlib.Path, int]:
     """A new run's folder under `base`, and the lock this run now holds on it."""
-    base.mkdir(parents=True, exist_ok=True)
+    with contextlib.suppress(FileExistsError):
+        base.mkdir(mode=0o700, parents=True)
+    private_base(base)
     starting = pathlib.Path(tempfile.mkdtemp(prefix="starting-", dir=base))
-    lock = os.open(starting / LOCK, OPEN_LOCK, 0o600)
+    # RULE: a run s lock is made new
+    lock = os.open(starting / LOCK, OPEN_NEW_LOCK, 0o600)
     fcntl.flock(lock, fcntl.LOCK_EX)
     while True:
         folder = base / f"run-{secrets.randbelow(10**12):012d}"
@@ -89,29 +128,37 @@ def end_run(folder: pathlib.Path, lock: int, base: pathlib.Path) -> None:
         base.rmdir()
 
 
-def _ours_to_look_at(path: pathlib.Path) -> bool:
-    """A real folder of this user's, named like a run's, and not one that may be starting now."""
-    named, starting = NAMED.fullmatch(path.name), STARTING.fullmatch(path.name)
+def _ours_to_look_at(path: pathlib.Path) -> os.stat_result | None:
+    """What `path` is, if it is a real folder of this user's named like a run's.
+
+    None when it is not, or when another sweep removed it first.
+    """
+    if not (NAMED.fullmatch(path.name) or STARTING.fullmatch(path.name)):
+        return None
     try:
         found = path.lstat()
     except FileNotFoundError:
-        return False
-    return bool(
-        (named or starting)
-        and stat.S_ISDIR(found.st_mode)
-        and found.st_uid == os.getuid()
-        and not (starting and time.time() - found.st_mtime < STARTING_SECONDS)
-    )
+        return None
+    if not stat.S_ISDIR(found.st_mode) or found.st_uid != os.getuid():
+        return None
+    return found
 
 
 def dead(path: pathlib.Path) -> bool:
     """Whether `path` is a run's folder whose run has ended: ours to look at, and unlocked."""
-    if not _ours_to_look_at(path):
+    found = _ours_to_look_at(path)
+    if found is None:
         return False
     try:
-        lock = os.open(path / LOCK, OPEN_LOCK, 0o600)
+        # RULE: a sweep never makes a lock in a folder that has none
+        lock = os.open(path / LOCK, OPEN_THEIR_LOCK)
+    except FileNotFoundError:
+        # No lock yet: a new run's claimed name, or a run killed before it locked. The
+        # first look's age is used: another sweep may have removed the folder since.
+        # RULE: a folder with no lock is dead only after the grace period
+        return time.time() - found.st_mtime >= STARTING_SECONDS
     except OSError:
-        return bool(STARTING.fullmatch(path.name))  # killed before it could lock
+        return False
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
@@ -123,7 +170,10 @@ def dead(path: pathlib.Path) -> bool:
 
 def dead_runs(base: pathlib.Path) -> list[pathlib.Path]:
     """The run folders under `base` that runs which died left; never one a run holds."""
-    return [path for path in sorted(base.iterdir()) if dead(path)] if base.is_dir() else []
+    if not os.path.lexists(base):
+        return []
+    private_base(base)
+    return [path for path in sorted(base.iterdir()) if dead(path)]
 
 
 def forget(base: pathlib.Path) -> None:

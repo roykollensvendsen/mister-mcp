@@ -1,0 +1,5 @@
+[[rule]]
+name = "a sweep never makes a lock in a folder that has none"
+file = "scripts/run_folders.py"
+find = 'lock = os\.open\(path / LOCK, OPEN_THEIR_LOCK\)'
+replace = 'lock = os.open(path / LOCK, OPEN_THEIR_LOCK | os.O_CREAT, 0o600)'
