@@ -1,0 +1,5 @@
+[[rule]]
+name = "repair only puts back what a killed run left and does nothing else"
+file = "scripts/mutate.py"
+find = 'if args\.repair_only:'
+replace = 'if False:'

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import fcntl
 import hashlib
 import importlib.util
 import json
@@ -126,7 +127,8 @@ MARKER = re.compile(r"^[ \t]*#\s*RULE:\s*(.+?)\s*$", re.MULTILINE)
 
 def marked_rules() -> list[str]:
     """Every rule the source under src/ marks."""
-    return [m for path in sorted((ROOT / "src").rglob("*.py")) for m in MARKER.findall(path.read_text())]
+    sources = sorted((ROOT / "src").rglob("*.py"))
+    return [m for path in sources for m in MARKER.findall(path.read_text(encoding="utf-8"))]
 
 
 def test_name_for(rule: str) -> str:
@@ -165,18 +167,67 @@ def sweep() -> None:
 
 def _clean_start() -> None:
     """Undo what a killed run left: a source file still switched off, and its temporary files."""
-    stop_cleanly()
     repair()
     sweep()
 
 
+#: How a run is stopped from outside: Ctrl-C, a cancelled CI job, a closed terminal.
+STOPS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
+PACKAGE = "mister_mcp"
+
+
 def stop_cleanly() -> None:
-    """Make SIGTERM end the run as Ctrl-C does, so every finally still runs and puts a file back."""
-    signal.signal(signal.SIGTERM, _stopped)
+    """Make every stop end the run as Ctrl-C does, so every finally still runs and puts a file back."""
+    # RULE: a stopped run cleans up as an interrupted one does
+    for each in STOPS:
+        signal.signal(each, _stopped)
 
 
 def _stopped(number: int, _frame: object) -> None:
+    # GitHub cancels with SIGINT, then SIGTERM: the second must not cut the first one's cleanup short.
+    for later in STOPS:
+        # RULE: a second stop does not cut the cleanup short
+        signal.signal(later, signal.SIG_IGN)
+    if number == signal.SIGINT:
+        raise KeyboardInterrupt
     raise SystemExit(128 + number)
+
+
+def one_run_here() -> int | None:
+    """A lock on this checkout for the whole run, or None when another run already holds it."""
+    checkout = os.open(ROOT, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        # RULE: one mutation run per checkout
+        fcntl.flock(checkout, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        os.close(checkout)
+        return None
+    return checkout
+
+
+def from_this_checkout() -> None:
+    """Stop unless the suite will import the package from this checkout's own src/.
+
+    Two worktrees sharing one environment measure each other's code. Asked of the same
+    interpreter the suite runs with, in a process of its own: this script never imports it.
+    """
+    found = subprocess.run(  # noqa: S603 - this interpreter, a fixed line of code
+        [sys.executable, "-c", f"import {PACKAGE}; print({PACKAGE}.__file__)"],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+        check=False,
+    )
+    source = (ROOT / "src").resolve()
+    here = pathlib.Path(found.stdout.strip() or "nowhere").resolve()
+    # RULE: a run refuses a package imported from another checkout
+    if not here.is_relative_to(source):
+        msg = (
+            f"{sys.executable} imports {PACKAGE} from {here}, not from {source}: this run would "
+            f"measure another checkout's code. Run `uv sync` in {ROOT}, then run this again."
+            + (f"\n{found.stderr[-500:]}" if found.returncode else "")
+        )
+        raise SystemExit(msg)
 
 
 def repair() -> None:
@@ -231,7 +282,7 @@ def run_suite() -> tuple[int, list[str]]:
                 "-p",
                 "no:cacheprovider",
                 # Beside the run's lock, never around it: pytest empties its basetemp first.
-                # RULE: pytest s folder sits beside the run s lock
+                # RULE: pytest s folder sits beside the run s lock never around it
                 f"--basetemp={temporary / 'pytest'}",
             ],
             capture_output=True,
@@ -256,6 +307,7 @@ def run_suite() -> tuple[int, list[str]]:
 def _no_rows() -> int:
     """With no rows, pass only a repository that marks no rules yet."""
     marked = marked_rules()
+    # RULE: rules marked with no rows fail the run and say how to get them back
     if marked:
         print(  # noqa: T201
             f"{len(marked)} rule{'s' if len(marked) != 1 else ''} marked in src/ but no rows in"
@@ -271,14 +323,34 @@ def main() -> int:
     """Mutate every rule in turn, restore the tree, and report."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write", type=pathlib.Path, help="write the evidence table here")
+    parser.add_argument(
+        "--repair-only", action="store_true", help="put back what a killed run left mutated, and stop"
+    )
     args = parser.parse_args()
+    checkout = one_run_here()
+    if checkout is None:
+        print(f"A mutation run is already running in {ROOT}; wait for it to end, then run this again.")  # noqa: T201
+        return 1
+    try:
+        return _run(args)
+    finally:
+        os.close(checkout)
 
+
+def _run(args: argparse.Namespace) -> int:
+    """The run itself, once this checkout is ours alone."""
+    stop_cleanly()
+    # RULE: repair only puts back what a killed run left and does nothing else
+    if args.repair_only:
+        repair()
+        return 0
     _clean_start()
-    # RULE: an empty rule table is not a crash
+    # RULE: a new repository with no rules and no rows is not a failure
     # A scaffolded repository starts with a table of comments and no rows.
     rules = all_rows()
     if not rules:
         return _no_rows()
+    from_this_checkout()
     results = []
     lost: list[str] = []
     standing: tuple[pathlib.Path, str, str] | None = None

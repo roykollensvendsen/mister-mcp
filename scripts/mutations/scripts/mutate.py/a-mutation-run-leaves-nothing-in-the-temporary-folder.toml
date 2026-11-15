@@ -1,0 +1,5 @@
+[[rule]]
+name = "a mutation run leaves nothing in the temporary folder"
+file = "scripts/mutate.py"
+find = 'run_folders\.end_run\(temporary, lock, MUTATE_TMP\)'
+replace = 'run_folders.remove(temporary); os.close(lock)'

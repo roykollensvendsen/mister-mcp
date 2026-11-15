@@ -1,0 +1,5 @@
+[[rule]]
+name = "a Ctrl-C in the terminal reaches the step once"
+file = "scripts/ratchet.py"
+find = 'start_new_session=True,'
+replace = 'start_new_session=False,'

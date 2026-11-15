@@ -1,0 +1,5 @@
+[[rule]]
+name = "the ratchet refuses a package imported from another checkout"
+file = "scripts/ratchet.py"
+find = 'if not here\.is_relative_to\(source\):'
+replace = 'if False:'

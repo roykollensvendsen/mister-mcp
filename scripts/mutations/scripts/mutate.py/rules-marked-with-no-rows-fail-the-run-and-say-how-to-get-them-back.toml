@@ -1,0 +1,5 @@
+[[rule]]
+name = "rules marked with no rows fail the run and say how to get them back"
+file = "scripts/mutate.py"
+find = '^\s*if marked:$'
+replace = 'if False:'

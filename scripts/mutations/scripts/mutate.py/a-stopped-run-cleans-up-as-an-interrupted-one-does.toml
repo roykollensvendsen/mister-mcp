@@ -1,0 +1,5 @@
+[[rule]]
+name = "a stopped run cleans up as an interrupted one does"
+file = "scripts/mutate.py"
+find = 'signal\.signal\(each, _stopped\)'
+replace = 'pass'

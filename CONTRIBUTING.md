@@ -32,6 +32,14 @@ committed --no-merge-commit origin/main..HEAD
 python scripts/no_session_links.py origin/main..HEAD
 ```
 
+Each worktree has its own `.venv`: run `uv sync` in it, and never point
+`UV_PROJECT_ENVIRONMENT` at a shared one. Both scripts refuse to measure a
+package imported from another checkout. One mutation run per checkout: a
+second one stops at once. A run stopped by Ctrl-C, a cancelled job or a closed
+terminal puts back the line it switched off. After a `kill -9`,
+`uv run python scripts/mutate.py --repair-only` puts it back and does nothing
+else.
+
 The suite also scans every tracked file for a home address, and CI scans the
 whole history for keys with gitleaks. The pre-commit hook runs the same
 private-data scan over what is staged, so a home address is refused before it
