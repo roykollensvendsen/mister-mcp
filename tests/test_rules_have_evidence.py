@@ -16,6 +16,7 @@ leave a rule looking guarded while nothing guards it.
 import importlib.util
 import pathlib
 import re
+import sys
 
 import pytest
 
@@ -151,3 +152,39 @@ def test_a_row_s_folder_is_the_whole_path_of_the_file_it_switches_off():
     assert row_path({"name": "x", "file": "scripts/ratchet.py"}) != row_path(
         {"name": "x", "file": "src/ratchet.py"}
     )
+
+
+def test_the_rows_folder_is_read_when_called_not_when_loaded(tmp_path, monkeypatch):
+    """A default bound at load time keeps reading the real folder after a test points ROWS elsewhere."""
+    mutate = _mutate()
+    folder = tmp_path / "mutations"
+    _put(folder, "src/mister_mcp/service.py", "elsewhere.toml", _row("elsewhere"))
+    monkeypatch.setattr(mutate, "ROWS", folder)
+    assert [rule["name"] for rule in mutate.all_rows()] == ["elsewhere"]
+    assert mutate.misfiled() == []
+
+
+def _bare(tmp_path, monkeypatch, *, marked):
+    """A checkout with no row files, whose source does or does not mark a rule."""
+    mutate = _mutate()
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "thing.py").write_text("# RULE: a thing is kept\n" if marked else "x = 1\n")
+    monkeypatch.setattr(mutate, "ROOT", tmp_path)
+    monkeypatch.setattr(mutate, "ROWS", tmp_path / "scripts/mutations")
+    monkeypatch.setattr(mutate, "RECOVERY", tmp_path / "recovery.json")
+    monkeypatch.setattr(mutate, "MUTATE_TMP", tmp_path / "mutate-tmp")
+    monkeypatch.setattr(sys, "argv", ["mutate.py"])
+    return mutate
+
+
+def test_rules_marked_with_no_rows_fail_the_run_and_say_how_to_get_them_back(tmp_path, monkeypatch, capsys):
+    """A lost or unchecked-out folder would otherwise pass with nothing switched off."""
+    assert _bare(tmp_path, monkeypatch, marked=True).main() == 1
+    said = capsys.readouterr().out
+    assert "git checkout origin/main -- scripts/mutations" in said
+    assert "1 rule" in said
+
+
+def test_a_new_repository_with_no_rules_and_no_rows_is_not_a_failure(tmp_path, monkeypatch, capsys):
+    assert _bare(tmp_path, monkeypatch, marked=False).main() == 0
+    assert "no rules" in capsys.readouterr().out
