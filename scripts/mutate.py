@@ -27,6 +27,7 @@ import os
 import pathlib
 import re
 import shutil
+import signal
 import stat
 import subprocess
 import sys
@@ -175,12 +176,29 @@ def sweep() -> None:
     # RULE: a killed run's temporary files are swept at the next start
     for left in MUTATE_TMP.iterdir() if MUTATE_TMP.is_dir() else []:
         _remove(left)
+    _forget_folder()
 
 
 def _clean_start() -> None:
     """Undo what a killed run left: a source file still switched off, and its temporary files."""
+    stop_cleanly()
     repair()
     sweep()
+
+
+def stop_cleanly() -> None:
+    """Make SIGTERM end the run as Ctrl-C does, so every finally still runs and puts a file back."""
+    signal.signal(signal.SIGTERM, _stopped)
+
+
+def _stopped(number: int, _frame: object) -> None:
+    raise SystemExit(128 + number)
+
+
+def _forget_folder() -> None:
+    """Remove the folder the runs live in once the last one has gone."""
+    with contextlib.suppress(OSError):
+        MUTATE_TMP.rmdir()
 
 
 def repair() -> None:
@@ -246,6 +264,8 @@ def run_suite() -> tuple[int, list[str]]:
     finally:
         # RULE: a suite run leaves no temporary files behind
         _remove(temporary)
+        # RULE: a mutation run leaves nothing in the temporary folder
+        _forget_folder()
     # --color=no covers the usual run; stripping covers a configuration that
     # turns colour back on, which would otherwise make every kill unattributable.
     # RULE: a coloured failure line is still attributed
