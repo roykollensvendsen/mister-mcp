@@ -1,0 +1,5 @@
+[[rule]]
+name = "a pin that is not six digits is never sent"
+file = "src/mister_mcp/pairing.py"
+find = '    if not _PIN\.fullmatch\(pin\):'
+replace = '    if False:'

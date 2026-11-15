@@ -1,0 +1,5 @@
+[[rule]]
+name = "the yes is spent before the start goes out"
+file = "src/mister_mcp/updater.py"
+find = '        until = self\._asked\.pop\(token, None\)'
+replace = '        until = self._asked.get(token)'

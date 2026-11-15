@@ -1,0 +1,5 @@
+[[rule]]
+name = "a search is read five at a time from the offset"
+file = "src/mister_mcp/service.py"
+find = '        page = \[_game\(r\) for r in shown\[max\(offset, 0\)'
+replace = '        page = [_game(r) for r in shown[:MAX_RESULTS]]'

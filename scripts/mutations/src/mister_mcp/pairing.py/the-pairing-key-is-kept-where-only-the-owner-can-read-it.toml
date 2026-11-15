@@ -1,0 +1,5 @@
+[[rule]]
+name = "the pairing key is kept where only the owner can read it"
+file = "src/mister_mcp/pairing.py"
+find = '    os\.fchmod\(descriptor, 0o600\)'
+replace = '    os.fchmod(descriptor, 0o644)'

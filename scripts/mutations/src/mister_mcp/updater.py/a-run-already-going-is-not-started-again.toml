@@ -1,0 +1,5 @@
+[[rule]]
+name = "a run already going is not started again"
+file = "src/mister_mcp/updater.py"
+find = '        if \(await self\._shell\.run\("running"\)\)\.code == 0:'
+replace = '        if False:'

@@ -1,0 +1,5 @@
+[[rule]]
+name = "the question before ending a game names the version it would start"
+file = "src/mister_mcp/service.py"
+find = '        return f"\{self\.game\}\{self\.version\}" if self\.game else'
+replace = '        return self.game or f"the {self.system} core"'

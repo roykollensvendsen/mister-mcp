@@ -1,0 +1,5 @@
+[[rule]]
+name = "only an allow-listed call is ever sent"
+file = "src/mister_mcp/zaparoo.py"
+find = 'if method not in ALLOWED_METHODS:'
+replace = 'if False:'

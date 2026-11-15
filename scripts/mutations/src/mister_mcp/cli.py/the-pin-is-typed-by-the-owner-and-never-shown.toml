@@ -1,0 +1,5 @@
+[[rule]]
+name = "the pin is typed by the owner and never shown"
+file = "src/mister_mcp/cli.py"
+find = '        pin = getpass\.getpass\(ASK_PIN\)\.strip\(\)'
+replace = '        pin = input(ASK_PIN).strip()'

@@ -1,0 +1,5 @@
+[[rule]]
+name = "a second pairing request within zaparoos interval is refused"
+file = "src/mister_mcp/simulator.py"
+find = '        if self._clock\(\) - self._last < ZAPAROO_PAIR_INTERVAL:'
+replace = '        if False:'

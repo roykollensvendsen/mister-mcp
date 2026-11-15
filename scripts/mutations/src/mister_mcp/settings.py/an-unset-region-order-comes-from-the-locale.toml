@@ -1,0 +1,5 @@
+[[rule]]
+name = "an unset region order comes from the locale"
+file = "src/mister_mcp/settings.py"
+find = '    first = _first_region\(locale\)'
+replace = '    first = None'

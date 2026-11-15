@@ -1,0 +1,5 @@
+[[rule]]
+name = "addresses are tried in the order the settings give"
+file = "src/mister_mcp/zaparoo.py"
+find = 'order = list\(self\._addresses\)'
+replace = 'order = list(reversed(self._addresses))'

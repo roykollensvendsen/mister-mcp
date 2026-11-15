@@ -1,0 +1,5 @@
+[[rule]]
+name = "a core is started only by a system Zaparoo listed"
+file = "src/mister_mcp/zaparoo.py"
+find = 'if system_id not in systems or not _SYSTEM_ID\.fullmatch\(system_id\):'
+replace = 'if False:'

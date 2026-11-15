@@ -1,0 +1,5 @@
+[[rule]]
+name = "a bad dump is hidden when a good copy of the same title and region exists"
+file = "src/mister_mcp/versions.py"
+find = '    return version\.kind in BESIDE_CLEAN_KINDS and _twin'
+replace = '    return version.kind in BESIDE_CLEAN_KINDS - {"bad dump"} and _twin(result, version) in clean'

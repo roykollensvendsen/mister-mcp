@@ -1,0 +1,5 @@
+[[rule]]
+name = "every ssh call runs in batch mode"
+file = "src/mister_mcp/ssh.py"
+find = 'batch = \["-o", "BatchMode=yes"\]'
+replace = 'batch = ["-o", "BatchMode=no"]'

@@ -1,0 +1,5 @@
+[[rule]]
+name = "a command cut off while running is never sent again"
+file = "src/mister_mcp/ssh.py"
+find = '        return self\.reached or self\.cut_off'
+replace = '        return self.reached'

@@ -1,0 +1,5 @@
+[[rule]]
+name = "the tv is touched only once the game started"
+file = "src/mister_mcp/service.py"
+find = 'if not started\["success"\] or self\.tv is None:'
+replace = 'if self.tv is None:'

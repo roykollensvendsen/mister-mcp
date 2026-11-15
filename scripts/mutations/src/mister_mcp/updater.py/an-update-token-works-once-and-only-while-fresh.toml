@@ -1,0 +1,5 @@
+[[rule]]
+name = "an update token works once and only while fresh"
+file = "src/mister_mcp/updater.py"
+find = '        if until is None or self\._clock\(\) > until:'
+replace = '        if until is None:'

@@ -1,0 +1,5 @@
+[[rule]]
+name = "a region is read from the file name as no intro and goodtools write it"
+file = "src/mister_mcp/versions.py"
+find = '    region = next\(\(r for r in REGIONS if r in regions\), None\)'
+replace = '    region = None'

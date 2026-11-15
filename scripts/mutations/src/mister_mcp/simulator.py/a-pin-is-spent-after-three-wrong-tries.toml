@@ -1,0 +1,5 @@
+[[rule]]
+name = "a pin is spent after three wrong tries"
+file = "src/mister_mcp/simulator.py"
+find = '        if self\._wrong >= PIN_TRIES:'
+replace = '        if False:'

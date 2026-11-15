@@ -1,0 +1,5 @@
+[[rule]]
+name = "the tv plugin is closed after every use, even a slow one"
+file = "src/mister_mcp/tv.py"
+find = 'await tv\.__aexit__\(None, None, None\)'
+replace = 'await asyncio.sleep(0)'

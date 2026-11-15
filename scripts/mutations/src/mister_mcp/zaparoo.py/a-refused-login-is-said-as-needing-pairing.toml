@@ -1,0 +1,5 @@
+[[rule]]
+name = "a refused login is said as needing pairing"
+file = "src/mister_mcp/zaparoo.py"
+find = '        if _refusal\(raw\):'
+replace = '        if False:'

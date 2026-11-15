@@ -1,0 +1,5 @@
+[[rule]]
+name = "a verified dump comes before an unmarked one in the same region"
+file = "src/mister_mcp/versions.py"
+find = '        verified = 0 if version\.verified else 1'
+replace = '        verified = 0'

@@ -1,0 +1,5 @@
+[[rule]]
+name = "a server that cannot prove the pin is never trusted"
+file = "src/mister_mcp/pairing.py"
+find = '    if not hmac\.compare_digest\(expected, base64\.b64decode\(finished\.get\("confirm", ""\)\)\):'
+replace = '    if False:'

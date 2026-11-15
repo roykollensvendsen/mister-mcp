@@ -1,0 +1,5 @@
+[[rule]]
+name = "a start that did not answer is checked as running before anything is said"
+file = "src/mister_mcp/updater.py"
+find = '        if still\.code == 0:'
+replace = '        if False:'
