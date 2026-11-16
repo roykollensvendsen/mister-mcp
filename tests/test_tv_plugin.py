@@ -128,11 +128,14 @@ def test_a_tv_plugin_whose_start_is_cut_short_is_still_stopped(tmp_path, monkeyp
     log.touch()
     command = [sys.executable, str(FAKE), "on", str(log), "60"]
     plugin = TvPlugin(command=command, tv="the den", device="Game box")
-    if caller == "launch":
-        assert _bounded(lambda: show_mister(plugin), log)["outcome"] == "working"
-    else:
-        assert _bounded(lambda: _start_cut_short(plugin), log) == "cut short"
-    assert not plugin.is_open
-    left = _running_with(str(log))
-    subprocess.run(["pkill", "-f", str(log)], check=False)
-    assert not left, f"the TV plugin was left running after its start was cut short: {left}"
+    try:
+        if caller == "launch":
+            assert _bounded(lambda: show_mister(plugin), log)["outcome"] == "working"
+        else:
+            assert _bounded(lambda: _start_cut_short(plugin), log) == "cut short"
+        assert not plugin.is_open
+        left = _running_with(str(log))
+        assert not left, f"the TV plugin was left running after its start was cut short: {left}"
+    finally:
+        # Whatever failed above, no stand-in is left sleeping out its 60 s.
+        subprocess.run(["pkill", "-f", str(log)], check=False)
