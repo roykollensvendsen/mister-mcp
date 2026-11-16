@@ -89,7 +89,7 @@ def _stopped(number: int, _frame: object) -> None:
 
 
 def sweep() -> None:
-    """Remove what a killed run left: its copy of the base, and the worktree git keeps for it."""
+    """Remove the folders killed runs left, each with its copy of the base inside."""
     # RULE: a killed ratchet s copy of main is swept at the next start
     for left in run_folders.dead_runs(RATCHET_TMP):
         run_folders.remove(left)

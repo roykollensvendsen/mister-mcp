@@ -1,0 +1,5 @@
+[[rule]]
+name = "a run started while another removes the empty base still starts"
+file = "scripts/run_folders.py"
+find = 'if attempt == TRIES:'
+replace = 'if True:'
