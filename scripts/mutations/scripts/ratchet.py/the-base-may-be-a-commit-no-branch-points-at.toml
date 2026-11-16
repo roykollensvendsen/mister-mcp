@@ -2,4 +2,4 @@
 name = "the base may be a commit no branch points at"
 file = "scripts/ratchet.py"
 find = '\(\*ANY_COMMIT, "fetch"'
-replace = '("git", "fetch"'
+replace = '("git", "fetch", "-q", "--depth", "1", str(ROOT), sha.stdout.strip()),'
