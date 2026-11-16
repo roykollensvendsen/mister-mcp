@@ -81,32 +81,48 @@ def private_base(base: pathlib.Path) -> None:
     try:
         handle = os.open(base, os.O_RDONLY | os.O_NOFOLLOW | os.O_DIRECTORY)
     except OSError:
-        found = None
+        reason = "a link or not a folder"
     else:
         try:
             found = os.fstat(handle)
+            if found.st_uid != os.getuid():
+                reason = "someone else's"
+            elif found.st_mode & 0o022:
+                reason = "open for other users to write in"
+            else:
+                reason = None
+                if found.st_mode & 0o077:
+                    # An older version made the base at 0755. Nobody else could write in
+                    # it, so it is kept, and closed to others from now on.
+                    # RULE: an older base open only to reading is made private
+                    os.fchmod(handle, 0o700)
         finally:
             os.close(handle)
-    if not (
-        found is not None
-        and stat.S_ISDIR(found.st_mode)
-        and found.st_uid == os.getuid()
-        and found.st_mode & 0o077 == 0
-    ):
+    if reason is not None:
         msg = (
-            f"{base} is not a private folder of yours: it is a link, a file, someone else's, "
-            f"or open to other users, so nothing was run in it. Remove it with `rm -r {base}` "
-            "and run this again."
+            f"{base} is {reason}, so nothing was run in it. Remove it with `rm -r {base}` and run this again."
         )
         raise SystemExit(msg)
 
 
+#: How often a run tries to start: twice covers another run removing the empty base once.
+TRIES = 2
+
+
 def start_run(base: pathlib.Path) -> tuple[pathlib.Path, int]:
     """A new run's folder under `base`, and the lock this run now holds on it."""
-    with contextlib.suppress(FileExistsError):
-        base.mkdir(mode=0o700, parents=True)
-    private_base(base)
-    starting = pathlib.Path(tempfile.mkdtemp(prefix="starting-", dir=base))
+    for attempt in range(1, TRIES + 1):
+        with contextlib.suppress(FileExistsError):
+            base.mkdir(mode=0o700, parents=True)
+        private_base(base)
+        try:
+            starting = pathlib.Path(tempfile.mkdtemp(prefix="starting-", dir=base))
+            break
+        except FileNotFoundError:
+            # Another run's end found the base empty and removed it just now: make it again.
+            # RULE: a run started while another removes the empty base still starts
+            if attempt == TRIES:
+                raise
     # RULE: a run s lock is made new
     lock = os.open(starting / LOCK, OPEN_NEW_LOCK, 0o600)
     fcntl.flock(lock, fcntl.LOCK_EX)

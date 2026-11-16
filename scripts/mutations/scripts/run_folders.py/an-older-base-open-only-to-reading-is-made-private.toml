@@ -1,0 +1,5 @@
+[[rule]]
+name = "an older base open only to reading is made private"
+file = "scripts/run_folders.py"
+find = 'os\.fchmod\(handle, 0o700\)'
+replace = 'pass'

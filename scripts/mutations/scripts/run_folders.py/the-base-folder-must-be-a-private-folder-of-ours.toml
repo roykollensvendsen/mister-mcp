@@ -1,5 +1,5 @@
 [[rule]]
 name = "the base folder must be a private folder of ours"
 file = "scripts/run_folders.py"
-find = 'and found\.st_mode & 0o077 == 0$'
-replace = 'and True'
+find = 'elif found\.st_mode & 0o022:'
+replace = 'elif False:'
