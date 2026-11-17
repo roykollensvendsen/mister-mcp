@@ -5,6 +5,7 @@ import asyncio
 import socket
 
 import pytest
+from bounded import WITHIN
 
 from mister_mcp.simulator import SimulatedMister
 from mister_mcp.zaparoo import (
@@ -76,6 +77,7 @@ def test_a_refused_connection_means_zaparoo_is_not_running():
         free.bind(("127.0.0.1", 0))
         port = free.getsockname()[1]
     transport = WebSocketTransport("127.0.0.1", port=port)
+    request = {"jsonrpc": "2.0", "id": 1, "method": "version"}
     with pytest.raises(ZaparooNotRunningError) as raised:
-        asyncio.run(transport.send({"jsonrpc": "2.0", "id": 1, "method": "version"}, wait=1.0))
+        asyncio.run(asyncio.wait_for(transport.send(request, wait=1.0), WITHIN))
     assert isinstance(raised.value, UnreachableError)

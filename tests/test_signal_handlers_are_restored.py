@@ -8,8 +8,9 @@ scratch project. The way is garage-door's, after tv-mcp #84.
 """
 
 import pathlib
-import subprocess
 import sys
+
+from bounded import run_bounded
 
 ROOT = pathlib.Path(__file__).parent.parent
 
@@ -34,11 +35,9 @@ def test_a_test_finds_the_stop_handlers_the_run_began_with(tmp_path):
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests/conftest.py").write_text((ROOT / "tests/conftest.py").read_text(encoding="utf-8"))
     (tmp_path / "tests/test_scratch.py").write_text(TESTS)
-    done = subprocess.run(
+    done = run_bounded(
         [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "--rootdir", str(tmp_path), "tests"],
         cwd=tmp_path,
-        capture_output=True,
         text=True,
-        check=False,
     )
     assert done.returncode == 0, done.stdout

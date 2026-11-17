@@ -18,6 +18,7 @@ import stat
 import threading
 
 import pytest
+from bounded import WITHIN
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -483,8 +484,10 @@ def test_the_pairing_posts_are_json_and_a_refusal_is_its_status():
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
         post = http_post("127.0.0.1", server.server_address[1])
-        assert asyncio.run(post("/api/pair/start", {"name": "test"})) == (200, {"echo": "test"})
-        assert asyncio.run(post("/api/pair/finish", {"name": "test"})) == (410, {"error": "pairing expired"})
+        start = asyncio.run(asyncio.wait_for(post("/api/pair/start", {"name": "test"}), WITHIN))
+        finish = asyncio.run(asyncio.wait_for(post("/api/pair/finish", {"name": "test"}), WITHIN))
+        assert start == (200, {"echo": "test"})
+        assert finish == (410, {"error": "pairing expired"})
     finally:
         server.shutdown()
 

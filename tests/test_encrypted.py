@@ -11,6 +11,7 @@ import json
 
 import pytest
 import websockets
+from bounded import WITHIN
 
 from mister_mcp import cli
 from mister_mcp.pairing import (
@@ -64,7 +65,7 @@ def _secured(seen):
 
 def _with_server(seen, scenario):
     async def run():
-        async with websockets.serve(_secured(seen), "127.0.0.1", 0) as server:
+        async with asyncio.timeout(WITHIN), websockets.serve(_secured(seen), "127.0.0.1", 0) as server:
             port = server.sockets[0].getsockname()[1]
             return await scenario(port)
 

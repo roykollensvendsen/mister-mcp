@@ -14,6 +14,7 @@ import os
 import sys
 import time
 
+from bounded import WITHIN
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
@@ -33,7 +34,11 @@ TOOLS = {
 def _listed(args, env=None):
     async def run():
         params = StdioServerParameters(command=sys.executable, args=["-m", "mister_mcp.cli", *args], env=env)
-        async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
+        async with (
+            asyncio.timeout(WITHIN),
+            stdio_client(params) as (read, write),
+            ClientSession(read, write) as session,
+        ):
             await session.initialize()
             return {tool.name for tool in (await session.list_tools()).tools}
 
