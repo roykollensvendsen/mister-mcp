@@ -12,12 +12,14 @@ import importlib.util
 import json
 import os
 import pathlib
+import re
 import signal
 import subprocess
 import sys
 import time
 
 import pytest
+from bounded import WITHIN
 
 ROOT = pathlib.Path(__file__).parent.parent
 
@@ -51,6 +53,40 @@ def _whole_run(tmp_path, monkeypatch):
     monkeypatch.setattr(mutate, "from_this_checkout", lambda: None)
     monkeypatch.setattr(sys, "argv", ["mutate.py"])
     return mutate
+
+
+class _Pipe:
+    """Output that, like a pipe in CI, shows only what has been flushed."""
+
+    def __init__(self):
+        self.held, self.shown = "", ""
+
+    def write(self, text):
+        self.held += text
+        return len(text)
+
+    def flush(self):
+        self.shown, self.held = self.shown + self.held, ""
+
+
+def test_a_mutation_run_names_each_rule_before_it_tests_it(tmp_path, monkeypatch):
+    """The name must be out of the process, not in its buffer, by the time the suite starts.
+
+    In CI the output is a pipe, which Python holds back until it is full. A run that hung on
+    one rule left nothing in the log to say which, and its result line has to get out as well.
+    """
+    mutate = _whole_run(tmp_path, monkeypatch)
+    pipe, seen = _Pipe(), []
+    monkeypatch.setattr(sys, "stdout", pipe)
+
+    def suite():
+        seen.append(pipe.shown)
+        return 1, ["test_x_is_one"]
+
+    monkeypatch.setattr(mutate, "run_suite", suite)
+    mutate.main()
+    assert "testing  x is one" in seen[0]
+    assert re.search(r"KILLED   x is one: 1 in \d+ s\n", pipe.shown), pipe.shown
 
 
 STOPPED_RUN = """
@@ -95,7 +131,7 @@ def _start(script, tmp_path):
 
 
 def _wait_for(path, child):
-    deadline = time.monotonic() + 30
+    deadline = time.monotonic() + WITHIN
     while not path.exists() and child.poll() is None and time.monotonic() < deadline:
         time.sleep(0.05)
     assert path.exists(), child.communicate()[0] if child.poll() is not None else f"no {path.name}"
@@ -108,7 +144,7 @@ def test_a_stopped_run_cleans_up_as_an_interrupted_one_does(tmp_path, stop):
     child = _start(STOPPED_RUN, tmp_path)
     assert (tmp_path / "project/rule.py").read_text() == "x = 2\n", "the rule was switched off"
     child.send_signal(stop)
-    out, _ = child.communicate(timeout=30)
+    out, _ = child.communicate(timeout=WITHIN)
     assert child.returncode == (-signal.SIGINT if stop == signal.SIGINT else 128 + stop), out
     assert (tmp_path / "project/rule.py").read_text() == "x = 1\n"
     assert not (tmp_path / "recovery.json").exists()
@@ -121,7 +157,7 @@ def test_a_second_stop_does_not_cut_the_cleanup_short(tmp_path):
     child.send_signal(signal.SIGINT)
     _wait_for(tmp_path / "cleaning", child)
     child.send_signal(signal.SIGTERM)
-    out, _ = child.communicate(timeout=30)
+    out, _ = child.communicate(timeout=WITHIN)
     assert (tmp_path / "project/rule.py").read_text() == "x = 1\n", out
     assert not (tmp_path / "recovery.json").exists()
 
@@ -230,7 +266,7 @@ def test_a_stopped_measurement_lets_its_step_put_back_what_it_changed(tmp_path, 
     """Point 8: the ratchet passes a stop to its child as Ctrl-C, and waits for it."""
     with _ratchet(tmp_path, STEP) as ratchet:
         ratchet.send_signal(stop)  # to the ratchet alone, as when its job is cancelled
-        out, _ = ratchet.communicate(timeout=60)
+        out, _ = ratchet.communicate(timeout=WITHIN)
         assert (tmp_path / "put-back").exists(), out
 
 
@@ -240,7 +276,7 @@ def test_a_second_stop_does_not_cut_the_ratchet_s_wait_short(tmp_path):
         ratchet.send_signal(signal.SIGINT)
         _wait_for(tmp_path / "cleaning", ratchet)
         ratchet.send_signal(signal.SIGTERM)
-        out, _ = ratchet.communicate(timeout=60)
+        out, _ = ratchet.communicate(timeout=WITHIN)
         assert (tmp_path / "put-back").exists(), out
 
 
@@ -248,7 +284,7 @@ def test_a_ctrl_c_in_the_terminal_reaches_the_step_once(tmp_path):
     """Point 8: a terminal sends Ctrl-C to the whole group; with the forwarded one, a step got two."""
     with _ratchet(tmp_path, COUNTED_STEP, start_new_session=True) as ratchet:
         os.killpg(ratchet.pid, signal.SIGINT)
-        out, _ = ratchet.communicate(timeout=60)
+        out, _ = ratchet.communicate(timeout=WITHIN)
         assert (tmp_path / "put-back").exists(), out
         assert (tmp_path / "got-int").read_text() == "INT\n"
 
@@ -261,7 +297,7 @@ def test_a_stopped_ratchet_tells_the_python_under_uv_once(tmp_path, stop):
             os.killpg(ratchet.pid, stop)  # a terminal's Ctrl-C, to the ratchet's whole group
         else:
             ratchet.send_signal(stop)  # to the ratchet alone, as when its job is cancelled
-        out, _ = ratchet.communicate(timeout=60)
+        out, _ = ratchet.communicate(timeout=WITHIN)
         assert (tmp_path / "put-back").exists(), out
         assert (tmp_path / "got-int").read_text() == "INT\n"  # once, not twice
 

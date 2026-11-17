@@ -50,3 +50,18 @@ def test_a_file_changed_during_the_run_is_never_restored_over(tmp_path, monkeypa
     edited.write_text("x = 3  # edited by hand meanwhile\n")
     assert mutate.restore(edited, "x = 1\n", "x = 2\n") is False
     assert edited.read_text() == "x = 3  # edited by hand meanwhile\n"
+
+
+def test_a_real_mutation_run_is_never_capped(tmp_path, monkeypatch):
+    """Roy's rule: no time limit on a mutation run. Only a test's scratch suite passes a bound."""
+    mutate = _mutate(tmp_path, monkeypatch)
+    _, asked = _suite_said(mutate, monkeypatch, "1 passed in 0.1s\n")
+    assert asked["timeout"] is None
+    asked.clear()
+    monkeypatch.setattr(
+        mutate.subprocess,
+        "run",
+        lambda command, **kw: asked.update(kw) or subprocess.CompletedProcess(command, 0, "", ""),
+    )
+    mutate.run_suite(timeout=300)
+    assert asked["timeout"] == 300
