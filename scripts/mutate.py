@@ -31,6 +31,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 import tomllib
 from typing import TYPE_CHECKING
 
@@ -260,8 +261,12 @@ def restore(path: pathlib.Path, original: str, mutated: str) -> bool:
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 
-def run_suite() -> tuple[int, list[str]]:
-    """Run the tests and give back how many failed, and which ones."""
+def run_suite(timeout: float | None = None) -> tuple[int, list[str]]:
+    """Run the tests and give back how many failed, and which ones.
+
+    `timeout` is for a test's scratch suite only. A real run passes none: Roy's rule is that
+    a mutation run is never capped.
+    """
     # Two mutations that replace equal-length text leave files of identical
     # size, and CPython validates a cached .pyc from the source's modification
     # time and size -- both at one-second resolution. Inside the same second
@@ -290,6 +295,8 @@ def run_suite() -> tuple[int, list[str]]:
             cwd=ROOT,
             check=False,
             env=env,
+            # RULE: a real mutation run is never capped
+            timeout=timeout,
         )
     finally:
         # RULE: a suite run leaves no temporary files behind
@@ -302,6 +309,17 @@ def run_suite() -> tuple[int, list[str]]:
     m = re.search(r"(\d+) (?:failed|error)", plain)
     failed = re.findall(r"^FAILED (\S+)", plain, re.MULTILINE)
     return int(m.group(1)) if m else 0, [f.split("::")[-1].split("[")[0] for f in failed]
+
+
+def switched_off(text: str, rule: dict) -> str:
+    """`text` with the rule's line replaced by the row's `replace`."""
+    lines = text.splitlines()
+    i = line_of(text, rule["find"], rule.get("occurrence", 1))
+    # Keep the line's own indentation: a replacement that carries its own
+    # would have to be kept in step with the source, and silently would not be.
+    indent = lines[i][: len(lines[i]) - len(lines[i].lstrip())]
+    lines[i] = indent + rule["replace"].strip()
+    return "\n".join(lines) + "\n"
 
 
 def _no_rows() -> int:
@@ -361,17 +379,17 @@ def _run(args: argparse.Namespace) -> int:
             # bulk snapshot taken up front is restored over anything edited
             # since, and losing an edit that way costs more than the run.
             text = path.read_text()
-            lines = text.splitlines()
-            i = line_of(text, rule["find"], rule.get("occurrence", 1))
-            # Keep the line's own indentation: a replacement that carries its own
-            # would have to be kept in step with the source, and silently would not be.
-            indent = lines[i][: len(lines[i]) - len(lines[i].lstrip())]
-            lines[i] = indent + rule["replace"].strip()
-            mutated = "\n".join(lines) + "\n"
+            mutated = switched_off(text, rule)
             RECOVERY.write_text(json.dumps({"file": rule["file"], "original": text, "mutated": mutated}))
             path.write_text(mutated)
             standing = (path, text, mutated)
+            # Sent at once, not held until the run ends: in CI the output is a pipe, so a
+            # run that hangs would otherwise leave no word of which rule it hung on.
+            # RULE: a mutation run names each rule before it tests it
+            print(f"testing  {rule['name']}", flush=True)  # noqa: T201
+            began = time.monotonic()
             count, failed = run_suite()
+            took = time.monotonic() - began
             if not restore(path, text, mutated):
                 lost.append(rule["file"])
             standing = None
@@ -381,7 +399,7 @@ def _run(args: argparse.Namespace) -> int:
             by_its_own = own in failed
             results.append((rule["name"], count, own, by_its_own))
             verdict = "KILLED  " if by_its_own else ("BY LUCK " if count else "SURVIVED")
-            print(f"{verdict} {rule['name']}: {count}")  # noqa: T201
+            print(f"{verdict} {rule['name']}: {count} in {took:.0f} s", flush=True)  # noqa: T201
     finally:
         if standing is not None:
             restore(*standing)

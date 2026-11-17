@@ -10,6 +10,7 @@ import threading
 import time
 
 import pytest
+from bounded import WITHIN
 
 from mister_mcp.cli import tv_from
 from mister_mcp.settings import SettingsError
@@ -17,7 +18,7 @@ from mister_mcp.tv import TvPlugin, show_mister
 
 FAKE = pathlib.Path(__file__).with_name("fake_tv_mcp.py")
 #: Seconds a TV step may take here before the TV plugin counts as left running.
-LEFT_RUNNING = 30.0
+LEFT_RUNNING = WITHIN
 
 
 def _bounded(work, log):
@@ -31,7 +32,7 @@ def _bounded(work, log):
     thread.start()
     thread.join(LEFT_RUNNING)
     if thread.is_alive():
-        subprocess.run(["pkill", "-f", str(log)], check=False)
+        subprocess.run(["pkill", "-f", str(log)], check=False, timeout=WITHIN)
         thread.join(LEFT_RUNNING)
         pytest.fail("the TV plugin was left running")
     return box["answer"]
@@ -138,4 +139,4 @@ def test_a_tv_plugin_whose_start_is_cut_short_is_still_stopped(tmp_path, monkeyp
         assert not left, f"the TV plugin was left running after its start was cut short: {left}"
     finally:
         # Whatever failed above, no stand-in is left sleeping out its 60 s.
-        subprocess.run(["pkill", "-f", str(log)], check=False)
+        subprocess.run(["pkill", "-f", str(log)], check=False, timeout=WITHIN)

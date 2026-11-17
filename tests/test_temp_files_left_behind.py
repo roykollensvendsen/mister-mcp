@@ -16,6 +16,7 @@ import sys
 import time
 
 import pytest
+from bounded import WITHIN, line_within
 
 ROOT = pathlib.Path(__file__).parent.parent
 
@@ -31,7 +32,9 @@ def _load(name, tmpdir, monkeypatch):
 
 
 def _git(*args, cwd):
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True).stdout
+    return subprocess.run(
+        ["git", *args], cwd=cwd, capture_output=True, text=True, check=True, timeout=WITHIN
+    ).stdout
 
 
 def _repository(place):
@@ -109,9 +112,9 @@ def test_a_stopped_run_still_removes_its_temporary_files(name, tmp_path):
     )
     env = {**os.environ, "TMPDIR": str(tmpdir)}
     run = subprocess.Popen([sys.executable, "-c", script], env=env, stdout=subprocess.PIPE, text=True)
-    assert run.stdout.readline().strip() == "ready"
+    assert line_within(run.stdout).strip() == "ready"
     run.send_signal(signal.SIGTERM)
-    run.wait(timeout=10)
+    run.wait(timeout=WITHIN)
     deadline = time.monotonic() + 5
     while list(tmpdir.iterdir()) and time.monotonic() < deadline:
         time.sleep(0.05)

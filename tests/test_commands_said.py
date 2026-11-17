@@ -4,7 +4,8 @@
 import asyncio
 import pathlib
 import shlex
-import subprocess
+
+from bounded import run_bounded
 
 from mister_mcp.server import BROKE, MISTER_STATUS
 from mister_mcp.tv import TvPlugin, TvSwitch, show_mister
@@ -16,7 +17,7 @@ def test_a_broken_tool_names_a_command_that_runs_as_typed():
     assert MISTER_STATUS in BROKE
     assert MISTER_STATUS.startswith("uv run --directory ~/mister-mcp ")
     words = [*shlex.split(MISTER_STATUS.replace("~/mister-mcp", str(ROOT))), "--simulate"]
-    done = subprocess.run(words, capture_output=True, text=True, timeout=60, check=False)
+    done = run_bounded(words, text=True)
     assert done.returncode == 0, done.stderr
     assert done.stdout.startswith("Simulated: The MiSTer is on")
 
