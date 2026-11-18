@@ -113,6 +113,16 @@ def test_the_base_folder_must_be_a_private_folder_of_ours(shape, reason, tmp_pat
             call(base)
 
 
+def test_a_base_another_user_owns_is_refused(tmp_path, monkeypatch):
+    """A private base made by another user is theirs: nothing is run in it, here or in a sweep."""
+    base = _base(tmp_path)
+    theirs = os.getuid() + 1
+    monkeypatch.setattr(rf.os, "getuid", lambda: theirs)
+    for call in (rf.start_run, rf.dead_runs):
+        with pytest.raises(SystemExit, match=f"{base} is someone else's.*rm -r"):
+            call(base)
+
+
 def test_an_older_base_open_only_to_reading_is_made_private(tmp_path):
     """An older version made the base at 0755; nobody else could write in it, so it is kept."""
     base = tmp_path / "base"
@@ -145,3 +155,38 @@ def test_a_run_started_while_another_removes_the_empty_base_still_starts(tmp_pat
         assert folder.is_dir()
     finally:
         rf.end_run(folder, lock, base)
+
+
+def _base_removed_before_its_check(base, monkeypatch):
+    """Another run's end removes the empty base just before this one opens it to check it."""
+    real = rf.private_base
+    calls = []
+
+    def removed_once(path):
+        calls.append(path)
+        if len(calls) == 1:
+            path.rmdir()  # another run ended just now, and found the base empty
+        real(path)
+
+    monkeypatch.setattr(rf, "private_base", removed_once)
+    return calls
+
+
+def test_a_run_started_while_another_removes_the_base_before_its_check_still_starts(tmp_path, monkeypatch):
+    """The base is gone, not a link: the run makes it again instead of stopping."""
+    base = tmp_path / "base"
+    calls = _base_removed_before_its_check(base, monkeypatch)
+    folder, lock = rf.start_run(base)
+    try:
+        assert len(calls) == 2
+        assert folder.parent == base
+        assert folder.is_dir()
+    finally:
+        rf.end_run(folder, lock, base)
+
+
+def test_a_sweep_finds_nothing_in_a_base_removed_before_its_check(tmp_path, monkeypatch):
+    """A base gone between the sweep's look and its check holds no dead runs; it is no error."""
+    base = _base(tmp_path)
+    _base_removed_before_its_check(base, monkeypatch)
+    assert rf.dead_runs(base) == []
