@@ -365,13 +365,13 @@ def test_an_unreadable_free_space_answer_is_refused():
 # -- a start that runs past the time limit -------------------------------------------------
 
 
-def _mister_whose_start_hangs(monkeypatch, *, starts=True):
+def _mister_whose_start_hangs(monkeypatch, *, starts=True, within=0.3):
     """Two addresses for one MiSTer whose `start` outlasts CALL_WITHIN; what was sent, in order.
 
     Each call still goes through the real ssh runner and its time limit, with a stand-in for ssh.
     With `starts`, the hanging start has set update_all going, as a slow real one may have.
     """
-    monkeypatch.setattr(mister_mcp.ssh, "CALL_WITHIN", 0.3)
+    monkeypatch.setattr(mister_mcp.ssh, "CALL_WITHIN", within)
     name_of = {command: name for name, command in ALLOWED_COMMANDS.items()}
     sent, going = [], []
     free = MIN_FREE_MB * 2 * 1024
@@ -409,6 +409,20 @@ def test_a_start_that_did_not_answer_is_checked_as_running_before_anything_is_sa
     answer = _run(service.confirm(token))
     assert [name for _, name in sent].count("start") == 1
     assert sent[-1][1] == "running"
+    assert (answer["outcome"], answer["say"]) == ("done", STARTED)
+
+
+def test_a_start_that_did_not_answer_is_checked_as_running_however_slow_the_machine_is(monkeypatch):
+    """At a load average of 30, a stand-in Python took longer to start than the call's limit.
+
+    Its answer was then cut off like the hanging start, and the test failed one run in four.
+    With a limit no process can start within, only the start may be cut off.
+    """
+    shell, sent = _mister_whose_start_hangs(monkeypatch, within=0.001)
+    service = _service(shell)
+    token = _run(service.request())["token"]
+    answer = _run(service.confirm(token))
+    assert [name for _, name in sent].count("start") == 1
     assert (answer["outcome"], answer["say"]) == ("done", STARTED)
 
 
