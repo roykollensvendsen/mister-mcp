@@ -2,8 +2,11 @@
 """The TV step through a real stdio child, as ADR-MM-002 describes, against a stand-in for tv-mcp."""
 
 import asyncio
+import contextlib
 import json
+import os
 import pathlib
+import signal
 import subprocess
 import sys
 import threading
@@ -21,18 +24,40 @@ FAKE = pathlib.Path(__file__).with_name("fake_tv_mcp.py")
 LEFT_RUNNING = WITHIN
 
 
+def _pid_file(log):
+    """Where the stand-in writes its pid: beside its log."""
+    return log.with_name(log.name + ".pid")
+
+
+def _stop(log):
+    """Stop the stand-in that writes to `log`, by its own pid, and nothing else.
+
+    Its pid is killed only while /proc still shows that process naming `log`, so a pid
+    the system has since given to another process is left alone. Stopping by a pattern
+    instead would end any process that names the log, a test's own shell among them.
+    """
+    try:
+        pid = int(_pid_file(log).read_text())
+        command = pathlib.Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
+    except (FileNotFoundError, ValueError):
+        return
+    if str(FAKE).encode() in command and str(log).encode() in command:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(pid, signal.SIGKILL)
+
+
 def _bounded(work, log):
     """Run `work()` to its end, or fail when a TV plugin left running keeps it from ending.
 
     An unclosed stand-in keeps asyncio.run waiting for ever; stopping it by its
-    own log path lets the test fail and say so instead of hanging the suite.
+    own pid lets the test fail and say so instead of hanging the suite.
     """
     box = {}
     thread = threading.Thread(target=lambda: box.setdefault("answer", asyncio.run(work())), daemon=True)
     thread.start()
     thread.join(LEFT_RUNNING)
     if thread.is_alive():
-        subprocess.run(["pkill", "-f", str(log)], check=False, timeout=WITHIN)
+        _stop(log)
         thread.join(LEFT_RUNNING)
         pytest.fail("the TV plugin was left running")
     return box["answer"]
@@ -139,7 +164,7 @@ def test_a_tv_plugin_whose_start_is_cut_short_is_still_stopped(tmp_path, monkeyp
         assert not left, f"the TV plugin was left running after its start was cut short: {left}"
     finally:
         # Whatever failed above, no stand-in is left sleeping out its 60 s.
-        subprocess.run(["pkill", "-f", str(log)], check=False, timeout=WITHIN)
+        _stop(log)
 
 
 @pytest.mark.skipif(not pathlib.Path("/proc").is_dir(), reason="reads running processes from /proc")
