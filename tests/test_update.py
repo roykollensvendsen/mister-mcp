@@ -368,7 +368,8 @@ def test_an_unreadable_free_space_answer_is_refused():
 def _mister_whose_start_hangs(monkeypatch, *, starts=True, within=0.3):
     """Two addresses for one MiSTer whose `start` outlasts CALL_WITHIN; what was sent, in order.
 
-    Each call still goes through the real ssh runner and its time limit, with a stand-in for ssh.
+    The start goes through the real ssh runner and its time limit, with a stand-in for ssh that
+    hangs. The other commands are answered at once, so how fast a process starts never matters.
     With `starts`, the hanging start has set update_all going, as a slow real one may have.
     """
     monkeypatch.setattr(mister_mcp.ssh, "CALL_WITHIN", within)
@@ -376,9 +377,9 @@ def _mister_whose_start_hangs(monkeypatch, *, starts=True, within=0.3):
     sent, going = [], []
     free = MIN_FREE_MB * 2 * 1024
     answers = {
-        "free_space": f"print('Filesystem 1024-blocks Used Available Capacity Mounted on');"
-        f"print('/dev/mmcblk0p1 31000000 1 {free} 1% /media/fat')",
-        "uptime": "print('900.0 100.0')",
+        "free_space": "Filesystem 1024-blocks Used Available Capacity Mounted on\n"
+        f"/dev/mmcblk0p1 31000000 1 {free} 1% /media/fat\n",
+        "uptime": "900.0 100.0\n",
     }
     real = SshShell.call
 
@@ -388,9 +389,11 @@ def _mister_whose_start_hangs(monkeypatch, *, starts=True, within=0.3):
         if name == "start":
             going.extend([True] if starts else [])
             return await real(address, _stand_in("import time; time.sleep(5)"))
+        # Answered at once, not by a process of their own: on a busy machine, starting
+        # one took longer than the limit, and an answer was cut off like the start.
         if name == "running":
-            return await real(address, _stand_in(f"import sys; sys.exit({0 if going else 1})"))
-        return await real(address, _stand_in(answers.get(name, "pass")))
+            return Reply(0 if going else 1, "", "", address)
+        return Reply(0, answers.get(name, ""), "", address)
 
     monkeypatch.setattr(SshShell, "call", staticmethod(call))
     return SshShell(["mister.example", ADDRESS], key_file="~/.config/mister-mcp/ssh-key"), sent
