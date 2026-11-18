@@ -1,0 +1,5 @@
+[[rule]]
+name = "a base another user owns is refused"
+file = "scripts/run_folders.py"
+find = 'if found\.st_uid != os\.getuid\(\):'
+replace = 'if False:'
