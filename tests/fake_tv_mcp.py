@@ -2,12 +2,14 @@
 """A stand-in for tv-mcp's server: tv_status, tv_input and a power tool, answering as tv-mcp does.
 
 Run as ``python fake_tv_mcp.py <screen> <log file> [<seconds> [answer]]``; each call is appended
-to the log. With seconds, it waits that long before it starts, as a TV plugin starting on a busy
-machine does; with ``answer`` too, it starts at once and waits that long before each answer.
+to the log, and its pid is written beside it. With seconds, it waits that long before it starts,
+as a TV plugin starting on a busy machine does; with ``answer`` too, it starts at once and waits
+that long before each answer.
 """
 
 import asyncio
 import json
+import os
 import pathlib
 import sys
 import time
@@ -15,6 +17,8 @@ import time
 from mcp.server.mcpserver import MCPServer
 
 SCREEN, LOG = sys.argv[1], pathlib.Path(sys.argv[2])
+# Beside the log, so a test can stop this process by its own pid, never by a pattern.
+LOG.with_name(LOG.name + ".pid").write_text(str(os.getpid()))
 server = MCPServer(name="tv")
 
 
