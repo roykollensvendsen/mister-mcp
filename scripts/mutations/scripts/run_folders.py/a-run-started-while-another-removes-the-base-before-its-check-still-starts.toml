@@ -1,0 +1,5 @@
+[[rule]]
+name = "a run started while another removes the base before its check still starts"
+file = "scripts/run_folders.py"
+find = '^ {8}raise$'
+replace = 'reason = "a link or not a folder"'

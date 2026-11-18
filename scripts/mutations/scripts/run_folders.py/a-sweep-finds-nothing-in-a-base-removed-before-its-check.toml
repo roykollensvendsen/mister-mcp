@@ -1,0 +1,5 @@
+[[rule]]
+name = "a sweep finds nothing in a base removed before its check"
+file = "scripts/run_folders.py"
+find = 'return \[\]  # nothing is left in it$'
+replace = 'raise'

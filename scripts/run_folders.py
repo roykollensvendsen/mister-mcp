@@ -76,15 +76,20 @@ def private_base(base: pathlib.Path) -> None:
 
     The base has a fixed name in the shared temporary folder, so anyone could make it
     first, or put a link there. Opened without following a link, then checked as opened.
+    A base that is gone raises FileNotFoundError, for the caller to decide.
     """
     # RULE: the base folder must be a private folder of ours
     try:
         handle = os.open(base, os.O_RDONLY | os.O_NOFOLLOW | os.O_DIRECTORY)
+    except FileNotFoundError:
+        # RULE: a run started while another removes the base before its check still starts
+        raise
     except OSError:
         reason = "a link or not a folder"
     else:
         try:
             found = os.fstat(handle)
+            # RULE: a base another user owns is refused
             if found.st_uid != os.getuid():
                 reason = "someone else's"
             elif found.st_mode & 0o022:
@@ -114,12 +119,13 @@ def start_run(base: pathlib.Path) -> tuple[pathlib.Path, int]:
     for attempt in range(1, TRIES + 1):
         with contextlib.suppress(FileExistsError):
             base.mkdir(mode=0o700, parents=True)
-        private_base(base)
         try:
+            private_base(base)
             starting = pathlib.Path(tempfile.mkdtemp(prefix="starting-", dir=base))
             break
         except FileNotFoundError:
-            # Another run's end found the base empty and removed it just now: make it again.
+            # Another run's end found the base empty and removed it just now, before its
+            # check or before the run's folder was made in it: make it again.
             # RULE: a run started while another removes the empty base still starts
             if attempt == TRIES:
                 raise
@@ -188,7 +194,12 @@ def dead_runs(base: pathlib.Path) -> list[pathlib.Path]:
     """The run folders under `base` that runs which died left; never one a run holds."""
     if not os.path.lexists(base):
         return []
-    private_base(base)
+    try:
+        private_base(base)
+    except FileNotFoundError:
+        # Another run's end removed the empty base after the look above.
+        # RULE: a sweep finds nothing in a base removed before its check
+        return []  # nothing is left in it
     return [path for path in sorted(base.iterdir()) if dead(path)]
 
 
