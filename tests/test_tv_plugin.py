@@ -140,3 +140,30 @@ def test_a_tv_plugin_whose_start_is_cut_short_is_still_stopped(tmp_path, monkeyp
     finally:
         # Whatever failed above, no stand-in is left sleeping out its 60 s.
         subprocess.run(["pkill", "-f", str(log)], check=False, timeout=WITHIN)
+
+
+@pytest.mark.skipif(not pathlib.Path("/proc").is_dir(), reason="reads running processes from /proc")
+def test_a_stand_in_is_stopped_by_its_own_pid_and_nothing_else(tmp_path):
+    """Stopping by a pattern could end any process that names the log, a test's own included."""
+    log = tmp_path / "calls.log"
+    log.touch()
+    sleep = "import time; time.sleep(60)"
+    with (
+        subprocess.Popen([sys.executable, str(FAKE), "on", str(log), "60"]) as stand_in,
+        subprocess.Popen([sys.executable, "-c", sleep, str(log)]) as bystander,
+    ):
+        try:
+            deadline = time.monotonic() + WITHIN
+            while not _pid_file(log).exists() and time.monotonic() < deadline:
+                time.sleep(0.05)
+            assert int(_pid_file(log).read_text()) == stand_in.pid
+            _stop(log)
+            assert stand_in.wait(timeout=WITHIN) is not None
+            assert bystander.poll() is None, "a process that only names the log was stopped too"
+            _pid_file(log).write_text(str(bystander.pid))  # a pid since taken by another process
+            _stop(log)
+            time.sleep(0.2)
+            assert bystander.poll() is None, "a pid whose process is not the stand-in was stopped"
+        finally:
+            stand_in.kill()
+            bystander.kill()
