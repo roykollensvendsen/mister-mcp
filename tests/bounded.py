@@ -1,6 +1,6 @@
 """Waits on another program that end in a failure of the waiting test, never in a hang.
 
-A mutation run has no time limit of its own, by Roy's rule, so a test that waits for ever
+A mutation run has no time limit of its own, by the owner's rule, so a test that waits for ever
 holds the whole run for ever. Every wait on a child here carries a bound the test sets
 itself, and running out of it fails that one test. That is how a mutant that hangs counts
 as caught. The bound is generous, so it only ever fires on a real hang.

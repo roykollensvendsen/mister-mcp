@@ -53,7 +53,7 @@ def test_a_file_changed_during_the_run_is_never_restored_over(tmp_path, monkeypa
 
 
 def test_a_real_mutation_run_is_never_capped(tmp_path, monkeypatch):
-    """Roy's rule: no time limit on a mutation run. Only a test's scratch suite passes a bound."""
+    """The owner's rule: no time limit on a mutation run. Only a test's scratch suite passes a bound."""
     mutate = _mutate(tmp_path, monkeypatch)
     _, asked = _suite_said(mutate, monkeypatch, "1 passed in 0.1s\n")
     assert asked["timeout"] is None
