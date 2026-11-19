@@ -1,0 +1,5 @@
+[[rule]]
+name = "a broken row is listed in the report and the step summary"
+file = "scripts/mutate.py"
+find = '^ {4}if step_summary:$'
+replace = 'if False:'
