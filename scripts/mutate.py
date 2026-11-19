@@ -371,6 +371,7 @@ def _run(args: argparse.Namespace) -> int:
     from_this_checkout()
     results = []
     lost: list[str] = []
+    bad_rows: list[str] = []
     standing: tuple[pathlib.Path, str, str] | None = None
     try:
         for rule in rules:
@@ -380,6 +381,16 @@ def _run(args: argparse.Namespace) -> int:
             # since, and losing an edit that way costs more than the run.
             text = path.read_text()
             mutated = switched_off(text, rule)
+            why = broken(rule["file"], mutated)
+            # RULE: a row that breaks the code is reported as broken
+            if why:
+                bad_rows.append(rule["name"])
+                print(  # noqa: T201
+                    f"BROKEN   {rule['name']}: the replacement is not valid code ({why});"
+                    f" make {_where(rule)} replace the line with a whole valid line",
+                    flush=True,
+                )
+                continue
             RECOVERY.write_text(json.dumps({"file": rule["file"], "original": text, "mutated": mutated}))
             path.write_text(mutated)
             standing = (path, text, mutated)
@@ -405,33 +416,81 @@ def _run(args: argparse.Namespace) -> int:
             restore(*standing)
         RECOVERY.unlink(missing_ok=True)
 
+    return _summary(results, bad_rows, lost, args.write)
+
+
+def _summary(
+    results: list[tuple[str, int, str, bool]],
+    bad_rows: list[str],
+    lost: list[str],
+    write: pathlib.Path | None,
+) -> int:
+    """Say what the run found, in the log, the evidence page and the CI summary; give the exit status."""
     survived = [name for name, count, _, _ in results if count == 0]
     lucky = [name for name, count, _, own in results if count and not own]
     proven = len(results) - len(survived) - len(lucky)
-    print(f"\n{proven}/{len(results)} rules turned off the test that names them")  # noqa: T201
+    # A broken row tested nothing, so it counts against the tally the ratchet reads.
+    print(f"\n{proven}/{len(results) + len(bad_rows)} rules turned off the test that names them")  # noqa: T201
     if survived:
         print("SURVIVED, so nothing protects them:", ", ".join(survived))  # noqa: T201
     if lucky:
         print("KILLED BY ANOTHER TEST, so the evidence is not about them:", ", ".join(lucky))  # noqa: T201
+    if bad_rows:
+        print("BROKEN ROW, so nothing was tested; make each a whole valid line:", ", ".join(bad_rows))  # noqa: T201
     if lost:
         print("CHANGED WHILE MUTATED, so left as they are:", ", ".join(sorted(set(lost))))  # noqa: T201
         print("Edit the tree while this runs and the result is not about your code.")  # noqa: T201
-    if args.write:
-        args.write.write_text(report(results, survived, lucky))
-    return 1 if survived or lucky or lost else 0
+    said = verdict(results, survived, lucky, bad_rows)
+    if write:
+        write.write_text(report(results, said))
+    # RULE: a broken row is listed in the report and the step summary
+    step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if step_summary:
+        with pathlib.Path(step_summary).open("a") as out:
+            out.write(f"## Every rule, turned off in turn\n\n{said}\n")
+    return 1 if survived or lucky or lost or bad_rows else 0
 
 
-def report(results: list[tuple[str, int, str, bool]], survived: list[str], lucky: list[str]) -> str:
+def _where(rule: dict) -> pathlib.Path:
+    """The rule's row file, from the repository's top where it is under it."""
+    path = ROWS / row_path(rule)
+    return path.relative_to(ROOT) if path.is_relative_to(ROOT) else path
+
+
+def broken(file: str, mutated: str) -> str | None:
+    """Why a mutated Python file no longer compiles, or None when it does.
+
+    A replacement cut off mid-expression stops the module importing, so every
+    test in its files errors: the run would count the rule as caught when the
+    row itself is wrong.
+    """
+    if not file.endswith(".py"):
+        return None
+    try:
+        compile(mutated, file, "exec")
+    except SyntaxError as e:
+        return f"line {e.lineno}: {e.msg}"
+    return None
+
+
+def verdict(
+    results: list[tuple[str, int, str, bool]], survived: list[str], lucky: list[str], bad_rows: list[str]
+) -> str:
+    """The run's result in one paragraph, for the evidence page and the CI summary."""
+    proven = len(results) - len(survived) - len(lucky)
+    return (
+        f"**Result: {proven} of {len(results) + len(bad_rows)} rules turned off the test that names them.**"
+        + (" None survived." if not survived else f" Survived: {', '.join(survived)}.")
+        + ("" if not lucky else f" Killed only by other tests: {', '.join(lucky)}.")
+        + ("" if not bad_rows else f" Broken rows, so nothing was tested: {', '.join(bad_rows)}.")
+    )
+
+
+def report(results: list[tuple[str, int, str, bool]], said: str) -> str:
     """Render the run as the evidence page."""
     rows = "\n".join(
         f"| {name} | {count} | `{own}` | {'yes' if by_own else 'NO'} |"
         for name, count, own, by_own in results
-    )
-    proven = len(results) - len(survived) - len(lucky)
-    verdict = (
-        f"**Result: {proven} of {len(results)} rules turned off the test that names them.**"
-        + (" None survived." if not survived else f" Survived: {', '.join(survived)}.")
-        + ("" if not lucky else f" Killed only by other tests: {', '.join(lucky)}.")
     )
     return f"""# Every rule, turned off in turn
 
@@ -445,7 +504,7 @@ Where a rule already exists, this is the substitute. Each rule is disabled in
 turn, by replacing its one line with something that can never hold, and the
 suite is run. A rule whose removal breaks no test is a rule nothing protects.
 
-{verdict}
+{said}
 
 | Rule turned off | Tests that went red | The test that names it | Did that one go red? |
 |---|---|---|---|
