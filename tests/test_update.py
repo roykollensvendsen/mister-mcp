@@ -391,6 +391,9 @@ def _mister_whose_start_hangs(monkeypatch, *, starts=True, within=0.3):
             return await real(address, _stand_in("import time; time.sleep(5)"))
         # Answered at once, not by a process of their own: on a busy machine, starting
         # one took longer than the limit, and an answer was cut off like the start.
+        # Each still waits once, as a call over the network does, so two confirms at the
+        # same time interleave as they would on a real MiSTer.
+        await asyncio.sleep(0)
         if name == "running":
             return Reply(0 if going else 1, "", "", address)
         return Reply(0, answers.get(name, ""), "", address)
