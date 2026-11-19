@@ -264,7 +264,7 @@ ANSI = re.compile(r"\x1b\[[0-9;]*m")
 def run_suite(timeout: float | None = None) -> tuple[int, list[str]]:
     """Run the tests and give back how many failed, and which ones.
 
-    `timeout` is for a test's scratch suite only. A real run passes none: Roy's rule is that
+    `timeout` is for a test's scratch suite only. A real run passes none: the owner's rule is that
     a mutation run is never capped.
     """
     # Two mutations that replace equal-length text leave files of identical
