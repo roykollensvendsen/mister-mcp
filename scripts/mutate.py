@@ -394,6 +394,17 @@ def _run(args: argparse.Namespace) -> int:
             RECOVERY.write_text(json.dumps({"file": rule["file"], "original": text, "mutated": mutated}))
             path.write_text(mutated)
             standing = (path, text, mutated)
+            why = fails_to_load(rule["file"])
+            # RULE: a row that breaks the module on loading is reported as broken
+            if why:
+                standing = _put_back(path, text, mutated, lost)
+                bad_rows.append(rule["name"])
+                print(  # noqa: T201
+                    f"BROKEN   {rule['name']}: the replacement stops the module loading ({why});"
+                    f" make {_where(rule)} replace the line with code that runs",
+                    flush=True,
+                )
+                continue
             # Sent at once, not held until the run ends: in CI the output is a pipe, so a
             # run that hangs would otherwise leave no word of which rule it hung on.
             # RULE: a mutation run names each rule before it tests it
@@ -401,10 +412,7 @@ def _run(args: argparse.Namespace) -> int:
             began = time.monotonic()
             count, failed = run_suite()
             took = time.monotonic() - began
-            if not restore(path, text, mutated):
-                lost.append(rule["file"])
-            standing = None
-            RECOVERY.unlink(missing_ok=True)
+            standing = _put_back(path, text, mutated, lost)
             # A kill by some other test is not evidence about this rule.
             own = test_name_for(rule["name"])
             by_its_own = own in failed
@@ -417,6 +425,16 @@ def _run(args: argparse.Namespace) -> int:
         RECOVERY.unlink(missing_ok=True)
 
     return _summary(results, bad_rows, lost, args.write)
+
+
+def _put_back(path: pathlib.Path, original: str, mutated: str, lost: list[str]) -> None:
+    """Restore a mutated file and drop its recovery note; a file changed meanwhile goes in `lost`.
+
+    Gives back None, for the caller's `standing`: nothing stands mutated any more.
+    """
+    if not restore(path, original, mutated):
+        lost.append(str(path.relative_to(ROOT)))
+    RECOVERY.unlink(missing_ok=True)
 
 
 def _summary(
@@ -471,6 +489,43 @@ def broken(file: str, mutated: str) -> str | None:
     except SyntaxError as e:
         return f"line {e.lineno}: {e.msg}"
     return None
+
+
+#: Loads one file as the suite would, without running a `__main__` block: a module under
+#: src/ by its dotted name, any other file (a script, say) from its path under another name.
+LOAD = """
+import importlib, importlib.util, sys
+file = sys.argv[1]
+if file.startswith("src/"):
+    importlib.import_module(file[4:-3].replace("/", ".").removesuffix(".__init__"))
+else:
+    spec = importlib.util.spec_from_file_location("mutant_loaded", file)
+    spec.loader.exec_module(importlib.util.module_from_spec(spec))
+"""
+
+
+def fails_to_load(file: str) -> str | None:
+    """Why the mutated file, now on disk, stops its module loading, or None when it loads.
+
+    A replacement can compile and still fail as the module loads, for example with a name
+    that is not defined. Every test that imports it then errors, which the run would count
+    as the rule's own test catching it. Asked of a fresh interpreter, with no bytecode, as
+    the suite will be.
+    """
+    if not file.endswith(".py"):
+        return None
+    loaded = subprocess.run(  # noqa: S603 - this interpreter, a fixed loader, a file from a row
+        [sys.executable, "-c", LOAD, file],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+        check=False,
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+    )
+    if loaded.returncode == 0:
+        return None
+    last = loaded.stderr.strip().splitlines()
+    return last[-1] if last else f"exit {loaded.returncode}"
 
 
 def verdict(
