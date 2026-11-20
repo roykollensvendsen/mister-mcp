@@ -1,0 +1,5 @@
+[[rule]]
+name = "a module loaded from another copy stops the run"
+file = "scripts/mutate.py"
+find = '^ {4}if loaded\.returncode == ELSEWHERE:$'
+replace = 'if False:'

@@ -491,13 +491,21 @@ def broken(file: str, mutated: str) -> str | None:
     return None
 
 
+#: How the loader says it imported some other copy of the module than the mutated file.
+ELSEWHERE = 3
+
 #: Loads one file as the suite would, without running a `__main__` block: a module under
 #: src/ by its dotted name, any other file (a script, say) from its path under another name.
+#: One fixed text: the file comes in as an argument, never as code.
 LOAD = """
-import importlib, importlib.util, sys
+import importlib, importlib.util, os, sys
 file = sys.argv[1]
 if file.startswith("src/"):
-    importlib.import_module(file[4:-3].replace("/", ".").removesuffix(".__init__"))
+    module = importlib.import_module(file[4:-3].replace("/", ".").removesuffix(".__init__"))
+    found, mutated = os.path.realpath(module.__file__), os.path.realpath(file)
+    if found != mutated:
+        print(found, file=sys.stderr)
+        sys.exit(3)
 else:
     spec = importlib.util.spec_from_file_location("mutant_loaded", file)
     spec.loader.exec_module(importlib.util.module_from_spec(spec))
@@ -511,6 +519,12 @@ def fails_to_load(file: str) -> str | None:
     that is not defined. Every test that imports it then errors, which the run would count
     as the rule's own test catching it. Asked of a fresh interpreter, with no bytecode, as
     the suite will be.
+
+    Loading runs the file's top-level code in this checkout once per row, so a row on a
+    script assumes the script does nothing but define things when imported.
+
+    Stops the run when the import finds some other copy of the module, as a plain install
+    would give: the check would then load the untouched original and pass without a word.
     """
     if not file.endswith(".py"):
         return None
@@ -524,6 +538,13 @@ def fails_to_load(file: str) -> str | None:
     )
     if loaded.returncode == 0:
         return None
+    # RULE: a module loaded from another copy stops the run
+    if loaded.returncode == ELSEWHERE:
+        msg = (
+            f"the suite would import {loaded.stderr.strip()}, not the mutated {ROOT / file}: "
+            f"this run would measure the wrong copy. Run `uv sync` in {ROOT}, then run this again."
+        )
+        raise SystemExit(msg)
     last = loaded.stderr.strip().splitlines()
     return last[-1] if last else f"exit {loaded.returncode}"
 
