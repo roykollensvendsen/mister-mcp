@@ -22,6 +22,19 @@ def _running(pid):
     return "State:\tZ" not in status
 
 
+def test_a_process_that_ends_while_its_status_is_read_is_not_running(monkeypatch):
+    """A status file that vanishes between its open and its read means the process ended.
+
+    The read then raises ProcessLookupError, which says the same as a missing file.
+    """
+
+    def ended_mid_read(self, *args, **kwargs):
+        raise ProcessLookupError(3, "No such process")
+
+    monkeypatch.setattr(pathlib.Path, "read_text", ended_mid_read)
+    assert _running(1) is False
+
+
 def test_a_child_that_overruns_is_killed_with_everything_it_started(tmp_path):
     """A grandchild holding the output, as under a shell or `uv run`, is not left running.
 
