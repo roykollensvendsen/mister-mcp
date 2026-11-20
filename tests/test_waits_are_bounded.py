@@ -17,7 +17,7 @@ def _running(pid):
     """Whether `pid` is a live process: not gone, and not a zombie waiting to be reaped."""
     try:
         status = pathlib.Path(f"/proc/{pid}/status").read_text()
-    except FileNotFoundError:
+    except (FileNotFoundError, ProcessLookupError):  # gone before the open, or during the read
         return False
     return "State:\tZ" not in status
 
