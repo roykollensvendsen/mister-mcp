@@ -1,0 +1,5 @@
+[[rule]]
+name = "a row that breaks the module on loading is reported as broken"
+file = "scripts/mutate.py"
+find = 'why = fails_to_load\(rule\["file"\]\)'
+replace = 'why = None'
