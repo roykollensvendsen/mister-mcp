@@ -5,6 +5,8 @@ import pathlib
 import subprocess
 import sys
 
+import pytest
+
 ROOT = pathlib.Path(__file__).parent.parent
 
 
@@ -119,6 +121,24 @@ def test_a_row_that_breaks_the_module_on_loading_is_reported_as_broken(tmp_path,
     assert "mutations/rule.py/x-is-one.toml" in out
     assert suites == []
     assert (project / "rule.py").read_text() == "x = 1\n"
+
+
+def test_a_module_loaded_from_another_copy_stops_the_run(tmp_path, monkeypatch):
+    """A plain install shadows src/: loading it would check the original, and pass quietly."""
+    mutate = _mutate(tmp_path, monkeypatch)
+    project, other = tmp_path / "project", tmp_path / "installed"
+    for copy in (project / "src", other):
+        (copy / "shadowed").mkdir(parents=True)
+        (copy / "shadowed" / "__init__.py").write_text("")
+        (copy / "shadowed" / "rule.py").write_text("x = 1\n")
+    (project / "src" / "shadowed" / "rule.py").write_text("x = undefined_name\n")
+    monkeypatch.setattr(mutate, "ROOT", project)
+    monkeypatch.setenv("PYTHONPATH", str(other))
+    with pytest.raises(SystemExit) as stopped:
+        mutate.fails_to_load("src/shadowed/rule.py")
+    said = str(stopped.value)
+    assert str(other / "shadowed" / "rule.py") in said
+    assert str(project / "src" / "shadowed" / "rule.py") in said
 
 
 def test_a_broken_row_is_listed_in_the_report_and_the_step_summary(tmp_path, monkeypatch):
