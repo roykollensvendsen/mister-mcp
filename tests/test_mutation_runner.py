@@ -68,8 +68,8 @@ def test_a_real_mutation_run_is_never_capped(tmp_path, monkeypatch):
     assert asked["timeout"] == 300
 
 
-def _broken_row_run(tmp_path, monkeypatch, *argv):
-    """A whole run over one rule, `x = 1`, whose row's replacement `x = (` is not valid code."""
+def _broken_row_run(tmp_path, monkeypatch, *argv, replace="x = ("):
+    """A whole run over one rule, `x = 1`, whose row's replacement breaks the module."""
     mutate = _mutate(tmp_path, monkeypatch)
     project = tmp_path / "project"
     project.mkdir()
@@ -77,7 +77,7 @@ def _broken_row_run(tmp_path, monkeypatch, *argv):
     rows = tmp_path / "mutations" / "rule.py"
     rows.mkdir(parents=True)
     (rows / "x-is-one.toml").write_text(
-        "[[rule]]\nname = \"x is one\"\nfile = \"rule.py\"\nfind = '^x = 1$'\nreplace = 'x = ('\n"
+        f"[[rule]]\nname = \"x is one\"\nfile = \"rule.py\"\nfind = '^x = 1$'\nreplace = '{replace}'\n"
     )
     monkeypatch.setattr(mutate, "ROOT", project)
     monkeypatch.setattr(mutate, "ROWS", tmp_path / "mutations")
@@ -103,6 +103,19 @@ def test_a_row_that_breaks_the_code_is_reported_as_broken(tmp_path, monkeypatch,
     assert "KILLED" not in out
     assert "0/1 rules turned off the test that names them" in out
     assert "BROKEN ROW, so nothing was tested; make each a whole valid line: x is one" in out
+    assert "mutations/rule.py/x-is-one.toml" in out
+    assert suites == []
+    assert (project / "rule.py").read_text() == "x = 1\n"
+
+
+def test_a_row_that_breaks_the_module_on_loading_is_reported_as_broken(tmp_path, monkeypatch, capsys):
+    """A replacement can compile and still stop the module loading, which every test would hit."""
+    mutate, project, suites = _broken_row_run(tmp_path, monkeypatch, replace="x = undefined_name")
+    assert mutate.main() == 1
+    out = capsys.readouterr().out
+    assert "BROKEN   x is one: the replacement stops the module loading (NameError:" in out
+    assert "KILLED" not in out
+    assert "0/1 rules turned off the test that names them" in out
     assert "mutations/rule.py/x-is-one.toml" in out
     assert suites == []
     assert (project / "rule.py").read_text() == "x = 1\n"
